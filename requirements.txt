@@ -1,0 +1,5 @@
+streamlit
+PyMySQL
+pydal
+st-pydantic
+PyAutoGUI
