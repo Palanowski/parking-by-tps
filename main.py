@@ -1,3 +1,4 @@
+import ctypes
 import random
 import re
 from datetime import datetime, timedelta
@@ -11,7 +12,8 @@ from models.color import get_colors
 from models.category import check_category, get_all_categories
 from models.model import check_model, get_all_models
 from models.parking import *
-from models.users import get_user_by_id, get_all_users
+from models.users import *
+from models.impressora import *
 from schemas.parking import ParkingModel
 
 # CONFIG
@@ -30,6 +32,8 @@ active_user_id = StringVar()
 active_user_name = StringVar(value="-efetuar login-")
 active_user_role = StringVar()
 
+total_count = StringVar(value="XXXXXX")
+
 in_plate = StringVar()
 in_model = StringVar()
 in_category = StringVar()
@@ -43,6 +47,7 @@ out_category = StringVar(value="")
 out_color = StringVar(value="")
 out_time = StringVar()
 delta_time = StringVar()
+delta_time_value = StringVar()
 total_value = StringVar()
 value_received = StringVar()
 change_value = StringVar(value="0.00")
@@ -99,6 +104,18 @@ phrase = [
 ]
 # AUXILIARY FUNCTIONS
 
+
+def calc_total_count():
+    prefix = random.randint(1000, 9999)
+    sufix = random.randint(1000, 9999)
+    total = get_total_open_parking()
+    if total<10:
+        result = f"{prefix}0{total}{sufix}"
+    else:
+        result = f"{prefix}{total}{sufix}"
+    total_count.set(result)
+
+
 def login_verification(event):
     user = get_user_by_id(login.get())
     if user:
@@ -111,6 +128,8 @@ def login_verification(event):
                 root_notebook.tab(config_tab, state="normal")
             else:
                 root_notebook.tab(config_tab, state="hidden")
+            log_in(user["name"])
+            calc_total_count()
             root_notebook.select(parking_tab)
             login.set("Usuário")
             password.set("Senha")
@@ -121,7 +140,48 @@ def login_verification(event):
         mb.showwarning("OPS", "Usuário inválido.")
 
 
-def insert_parking():
+def ask_for_password(userID, tab):
+    user = get_user_by_id(userID)
+    passwd = mb.askquestion("CONFIRMAÇÃO DE SENHA", "Confirme sua senha, por favor.")
+    if user["password"] == passwd:
+        root_notebook.select(tab)
+
+
+def logout():
+    user_name = active_user_name.get()
+    logout = mb.askyesno("LOGOUT", f"Olá {user_name}, deseja fazer logout?")
+    if logout:
+        log_out(user_name)
+
+
+def notebook_tab_selection(event):
+    selected_tab = event.widget.select()
+    tab_name = event.widget.tab(selected_tab, "text")
+    if ("acesso" in tab_name) and active_user_id.get():
+        logout()
+    if "Config" in tab_name:
+        ask_for_password(active_user_id, config_tab)
+
+
+def open_printer_connection():
+    from escpos.printer import Usb
+    
+    printer = Usb(idVendor="1fc9", idProduct=2016)
+    printer.text("Olá, mundo!\n")
+    printer.cut()
+
+
+def print_parking():
+    open_printer_connection()
+    ImpressaoTexto(
+        "teste de impressao Thomás Pica das Galaxias",
+        1,
+        8,
+        0,
+    )
+    Corte(3)
+
+def insert_parking(event):
     current_plate = in_plate.get()
     if not current_plate:
         mb.showwarning("ALERTA", "Digite uma placa válida")
@@ -138,26 +198,29 @@ def insert_parking():
             entry_user=active_user_name.get()
         )
         post_parking(parking_model)
+        calc_total_count()
         in_plate.set("")
         in_model.set("")
         in_category.set("")
         in_color.set("")
-        global df_in
-        df_in = get_today_parkings_as_df_in()
-        mount_in_table()
+        update_in_grid()
+        update_out_grid()
         in_plate_entry.focus()
+        print_parking()
 
 
 def ending_parking(status):
     if status == "FINALIZAR":
-        plateID = in_plate.get()
-        finalize_parking(plateID)
-    elif status == "DESISTIR":
         plateID = out_plate.get()
-        cancel_parking(plateID)
-    global df
-    df = get_today_parkings_as_df_in()
-    mount_in_table()
+        finalize_parking(plateID, delta_time_value.get())
+        close_exit_tab()
+    elif status == "DESISTIR":
+        confirmation = mb.askyesno("CONFIRMAR", "Você deseja aplicar a desistência nesse veículo?")
+        if confirmation:
+            plateID = out_plate.get()
+            cancel_parking(plateID)
+    update_in_grid()
+    update_out_grid()
 
 
 def sort_in_table(col):
@@ -236,6 +299,17 @@ def mount_out_table():
         out_table.insert("", 0, values=values, tags="red")
 
 
+def update_in_grid():
+    global df_in
+    df_in = get_today_parkings_as_df_in()
+    mount_in_table()
+
+
+def update_out_grid():
+    global df_out
+    df_out = get_today_parkings_as_df_out()
+    mount_out_table()
+
 def check_element(event, element):
     if element == "category":
         categoryID = in_category.get()
@@ -271,6 +345,8 @@ def check_element(event, element):
             out_model.set(parking["model"])
             out_category.set(parking["category"])
             out_color.set(parking["color"])
+            out_finalize_button.focus()
+            return parking
         else:
             mb.showwarning("ALERTA", "Placa não encontrada")
 
@@ -288,6 +364,9 @@ def clear_data(element):
         in_plate_entry.focus()
     if "out" in element:
         out_plate.set("")
+        out_model.set("")
+        out_category.set("")
+        out_color.set("")
         out_plate_entry.focus()
 
 
@@ -340,25 +419,27 @@ def calc_total_value(delta_hours: int, delta_minutes: int):
     return total
 
 
-def open_exit_tab():
-    root_notebook.tab(exit_tab, state="normal")
-    root_notebook.select(exit_tab)
-    root_notebook.tab(login_tab, state="hidden")
-    root_notebook.tab(config_tab, state="hidden")
-    root_notebook.tab(parking_tab, state="disabled")
-    plateID = out_plate.get()
-    parking = get_parking_by_plate(plateID)
-    in_time.set(parking["entry_time"].strftime("%H:%M"))
-    out_time.set(datetime.now().time().strftime("%H:%M"))
-    entry_delta_time = timedelta(hours=parking["entry_time"].hour, minutes=parking["entry_time"].minute)
-    exit_delta_time = timedelta(hours=datetime.now().hour, minutes=datetime.now().minute)
-    delta_time_value = exit_delta_time-entry_delta_time
-    delta_hours = int(delta_time_value.seconds/3600)
-    delta_minutes = int(delta_time_value.seconds/60)-delta_hours*60
-    delta_time.set(f"{delta_hours} hora(s), {delta_minutes} minuto(s)")
-    total_value.set(calc_total_value(delta_hours, delta_minutes))
-    total_received_entry_exit_tab.focus()
-    
+def open_exit_tab(event):
+    parking = check_element("out", element="out plate")
+    if parking["status"] == "EM ABERTO":
+        root_notebook.tab(exit_tab, state="normal")
+        root_notebook.select(exit_tab)
+        root_notebook.tab(login_tab, state="hidden")
+        root_notebook.tab(config_tab, state="hidden")
+        root_notebook.tab(parking_tab, state="disabled")
+        in_time.set(parking["entry_time"].strftime("%H:%M"))
+        out_time.set(datetime.now().time().strftime("%H:%M"))
+        entry_delta_time = timedelta(hours=parking["entry_time"].hour, minutes=parking["entry_time"].minute)
+        exit_delta_time = timedelta(hours=datetime.now().hour, minutes=datetime.now().minute)
+        delta_time_total = exit_delta_time-entry_delta_time
+        delta_time_value.set(delta_time_total)
+        delta_hours = int(delta_time_total.seconds/3600)
+        delta_minutes = int(delta_time_total.seconds/60)-delta_hours*60
+        delta_time.set(f"{delta_hours} hora(s), {delta_minutes} minuto(s)")
+        total_value.set(calc_total_value(delta_hours, delta_minutes))
+        total_received_entry_exit_tab.focus()
+    else:
+        mb.showwarning("ALERTA", "Não é possível finalizar um veículo que não está EM ABERTO")
 
 
 def close_exit_tab():
@@ -368,13 +449,15 @@ def close_exit_tab():
     root_notebook.tab(exit_tab, state="hidden")
     if active_user_role == "admin":
         root_notebook.tab(config_tab, state="normal")
-        
+    clear_data("out")
+    out_plate_entry.focus()
 
 # -----------------------------------------------------------------------------------------------------------
 # NOTEBOOK CONFIG
 # -----------------------------------------------------------------------------------------------------------
 root_notebook = ttk.Notebook(root)
 root_notebook.pack(expand=1,fill=BOTH)
+root_notebook.bind("<<NotebookTabChanged>>", notebook_tab_selection)
 
 login_tab = ttk.Frame(root_notebook)
 root_notebook.add(login_tab, text="Controle de acesso")
@@ -390,6 +473,10 @@ user_name_label = ttk.Label(user_frame, text="Usuário:", font=('Arial', 13, 'bo
 user_name_label.pack(side=LEFT)
 active_user_label = ttk.Label(user_frame, textvariable=active_user_name, font=('Arial', 13, 'bold'))
 active_user_label.pack(side=LEFT)
+count_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
+count_frame.place(relx=0.5, y=0, anchor=NE)
+count_total_label = ttk.Label(count_frame, textvariable=total_count, font=('Arial', 13, 'bold'))
+count_total_label.pack(side=LEFT)
 
 # -----------------------------------------------------------------------------------------------------------
 # LOGIN TAB WIDJETS
@@ -486,7 +573,7 @@ in_confirm_button = Button(
     in_frame_bottom,
     text="Entrar",
     font=('Arial', 18, 'bold'),
-    command=insert_parking,
+    command= lambda event="confirm": insert_parking(event),
     bg="royalblue",
     activebackground="coral1",
     activeforeground="white",
@@ -527,7 +614,7 @@ out_color_value = ttk.Label(out_frame_center_bottom, textvariable=out_color, fon
 out_finalize_button = Button(
     out_frame_bottom,
     text="Finalizar",
-    command=open_exit_tab,
+    command=lambda event="Return": open_exit_tab(event),
     font=('Arial', 18, 'bold'),
     bg="royalblue",
     activebackground="coral1",
@@ -549,7 +636,7 @@ out_cancel_button = Button(
     out_frame_bottom,
     text="Desistência",
     font=('Arial', 18, 'bold'),
-    command=lambda status="DESISTIR": ending_parking(status),
+    command= lambda status="DESISTIR": ending_parking(status),
     bg="lightblue",
     activebackground="coral1",
     activeforeground="white",
@@ -620,18 +707,25 @@ out_finalize_button.pack(side=LEFT, pady=5)
 out_plate_entry.bind("<Return>", lambda event: check_element(event, "out plate"))
 out_plate_entry.bind("<Tab>", lambda event: check_element(event, "out plate"))
 out_plate_entry.bind("<KP_Enter>", lambda event: check_element(event, "out plate"))
+
 in_plate_entry.bind("<Return>", lambda event: check_element(event, "in plate"))
 in_plate_entry.bind("<Tab>", lambda event: check_element(event, "in plate"))
 in_plate_entry.bind("<KP_Enter>", lambda event: check_element(event, "in plate"))
+
 in_model_entry.bind("<Return>", lambda event: check_element(event, "model"))
 in_model_entry.bind("<Tab>", lambda event: check_element(event, "model"))
 in_model_entry.bind("<KP_Enter>", lambda event: check_element(event, "model"))
+
 in_category_entry.bind("<Return>", lambda event: check_element(event, "catefory"))
 in_category_entry.bind("<Tab>", lambda event: check_element(event, "catefory"))
 in_category_entry.bind("<KP_Enter>", lambda event: check_element(event, "catefory"))
+
 in_color_entry.bind("<Return>", enter_ent_button_focus)
 in_color_entry.bind("<Tab>", enter_ent_button_focus)
 in_color_entry.bind("<KP_Enter>", enter_ent_button_focus)
+
+in_confirm_button.bind("<Return>", insert_parking)
+out_finalize_button.bind("<Return>", open_exit_tab)
 
 in_plate_entry.focus()
 
@@ -746,6 +840,7 @@ addition_label_exit_tab.place(relx=0.3, y=550, anchor=NW)
 addition_entry_exit_tab.place(relx=0.3, y=600, anchor=NW)
 
 if __name__ == "__main__":
+    open_printer_connection()
     global df_in, df_out
     df_in = get_today_parkings_as_df_in()
     df_out = get_today_parkings_as_df_out()

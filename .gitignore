@@ -1,5 +1,11 @@
 #---development files---
-parking-by-tps.code-workspace
+*.code-workspace
 
 #---env files---
 .env
+
+# Python temp files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc

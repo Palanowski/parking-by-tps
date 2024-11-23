@@ -6,7 +6,10 @@ from schemas.parking import ParkingModel
 
 def check_plate(plateID):
     with get_dal_mysql() as db:
-        park = db(db.parking.plate == plateID).select().first()
+        park = db(
+            (db.parking.plate == plateID)
+            & (db.parking.entry_date == datetime.now().date())
+            ).select().first()
     return False if park else True
 
 
@@ -62,11 +65,22 @@ def get_parking_by_plate(plateID):
     return result
 
 
-def finalize_parking(plateID):
+def get_total_open_parking():
     with get_dal_mysql() as db:
-        entry_time = db(db.parking.plate == plateID).select(db.parking.entry_time).firts()
+        return db(
+            (db.parking.status=="EM ABERTO")
+            & (db.parking.entry_date==datetime.now().date())
+        ).count()
+
+def finalize_parking(plateID, delta_time):
+    with get_dal_mysql() as db:
+        entry_time = db(db.parking.plate == plateID).select(db.parking.entry_time).first()
         exit_time = datetime.now().time()
-        db(db.parking.plate == plateID).update(exit_time=exit_time, delta_time=(exit_time - entry_time), status="FINALIZADO")
+        db(db.parking.plate == plateID).update(
+            exit_time=exit_time,
+            delta_time=delta_time,
+            status="FINALIZADO",
+        )
 
 
 def cancel_parking(plateID):
