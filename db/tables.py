@@ -22,7 +22,6 @@ def define_tables(db):
         primarykey=["id"],
     )
 
-
     db.define_table(
         "category",
         Field("id", "string", length=45, notnull=True),
@@ -32,7 +31,6 @@ def define_tables(db):
         Field("updated", "datetime", default=lambda: datetime.now()),
         primarykey=["id"],
     )
-
 
     db.define_table(
         "model",
@@ -73,10 +71,19 @@ def define_tables(db):
         Field("exit_time", "time"),
         Field("delta_time", "time"),
         Field("status", "reference parking_status.id", default="EM ABERTO"),
-        Field("entry_user", "reference users.name"),
-        Field("exit_user", "reference users.name"),
+        Field("entry_user", "string", length=45),
+        Field("exit_user", "string", length=45),
         Field("total_value", "double", notnull=True),
         Field("addition", "double", notnull=True),
         Field("discount", "double", notnull=True),
+        primarykey=["id"],
+    )
+
+    db.define_table(
+        "log_in",
+        Field("id", "integer", notnull=True),
+        Field("userID", "string", length=45),
+        Field("login_date", "datetime", default=lambda: datetime.now()),
+        Field("logout_date", "datetime", default=None),
         primarykey=["id"],
     )

@@ -1,5 +1,7 @@
-streamlit
-PyMySQL
-pydal
-st-pydantic
+pandas
 PyAutoGUI
+pydal
+pydantic
+pymysql
+python-dotenv
+ttkwidgets
