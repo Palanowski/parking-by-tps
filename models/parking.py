@@ -65,6 +65,19 @@ def get_parking_by_plate(plateID):
     return result
 
 
+def get_parking_by_code(barcode):
+    with get_dal_mysql() as db:
+        parking = db(
+            (db.parking.barcode==barcode)
+            & (db.parking.entry_date==datetime.now().date())
+        ).select().first()
+        if parking:
+            result = parking.as_dict()
+        else:
+            result = False
+    return result
+
+
 def get_total_open_parking():
     with get_dal_mysql() as db:
         return db(
@@ -72,11 +85,12 @@ def get_total_open_parking():
             & (db.parking.entry_date==datetime.now().date())
         ).count()
 
-def finalize_parking(plateID, delta_time):
+def finalize_parking(plateID, delta_time, userID):
     with get_dal_mysql() as db:
         entry_time = db(db.parking.plate == plateID).select(db.parking.entry_time).first()
         exit_time = datetime.now().time()
         db(db.parking.plate == plateID).update(
+            exit_user=userID,
             exit_time=exit_time,
             delta_time=delta_time,
             status="FINALIZADO",

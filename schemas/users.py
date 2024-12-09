@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field
 
 
-class CategoryModel(BaseModel):
+class UsersModel(BaseModel):
     """Modelo para adicionar um novo usuário."""
 
-    name: str = Field(..., description="Descrição da categoria")
-    password: str = Field(..., description="Valor cobrado por hora")
+    name: str = Field(..., description="Nome do usuário")
+    password: str = Field(..., description="Senha do usuário")
+    role: str = Field(..., description="Papel do usuário")

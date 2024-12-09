@@ -11,12 +11,12 @@ def get_all_categories():
     return categories
 
 
-def post_category(category: CategoryModel):
+def post_category(categoryModel: CategoryModel):
     with get_dal_mysql() as db:
         category = db(db.category.name==category.name).select().first()
         if category:
             raise Exception(detail="Esta categoria já existe")
-        new = db.category.insert(**category.model_dump())
+        new = db.category.insert(**categoryModel.model_dump())
     return new
 
 

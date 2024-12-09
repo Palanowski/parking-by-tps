@@ -9,12 +9,19 @@ from tkinter import messagebox as mb
 from ttkwidgets.autocomplete import AutocompleteEntry, AutocompleteCombobox, AutocompleteEntryListbox
 
 from models.color import get_colors
-from models.category import check_category, get_all_categories
-from models.model import check_model, get_all_models
+from models.category import check_category, get_all_categories, post_category
+from models.config import get_config
+from models.model import check_model, get_all_models, post_model
 from models.parking import *
 from models.users import *
 from models.impressora import *
+
+from schemas.category import CategoryModel
+from schemas.color import ColorModel
+from schemas.model import ModelModel
 from schemas.parking import ParkingModel
+from schemas.users import UsersModel
+
 
 # CONFIG
 root = Tk()
@@ -33,6 +40,26 @@ active_user_name = StringVar(value="-efetuar login-")
 active_user_role = StringVar()
 
 total_count = StringVar(value="XXXXXX")
+
+new_user_name = StringVar()
+new_user_password = StringVar()
+new_user_role = StringVar()
+
+new_model_name = StringVar()
+new_model_category = StringVar()
+
+new_category_name = StringVar()
+new_category_price = StringVar()
+
+new_color_name = StringVar()
+
+new_status = StringVar()
+
+config_tolerance = StringVar()
+config_daily_price = StringVar()
+config_daily_price_moto = StringVar()
+config_printer_header = StringVar()
+config_printer_footer = StringVar()
 
 in_plate = StringVar()
 in_model = StringVar()
@@ -160,26 +187,64 @@ def notebook_tab_selection(event):
     if ("acesso" in tab_name) and active_user_id.get():
         logout()
     if "Config" in tab_name:
-        ask_for_password(active_user_id, config_tab)
+        pass
 
 
 def open_printer_connection():
-    from escpos.printer import Usb
-    
-    printer = Usb(idVendor="1fc9", idProduct=2016)
-    printer.text("Olá, mundo!\n")
-    printer.cut()
-
-
-def print_parking():
-    open_printer_connection()
-    ImpressaoTexto(
-        "teste de impressao Thomás Pica das Galaxias",
+    AbreConexaoImpressora(
         1,
-        8,
-        0,
+        "I8",
+        "USB",
+        0
     )
+
+
+def print_parking(code):
+    config = get_config()
+    ImpressaoTexto("================================", 1, 8, 0)
+    AvancaPapel(1)
+    ImpressaoTexto("ESTACIONAMENTO C O S T E I R A", 1, 0, 0)
+    AvancaPapel(1)
+    ImpressaoTexto("Av. Pref. Osmar Cunha, 155 - Centro", 1, 1, 0)
+    AvancaPapel(1)
+    ImpressaoTexto(config["printer_header"], 1, 8, 0)
+    AvancaPapel(1)
+    ImpressaoTexto("================================", 1, 8, 0)
+    AvancaPapel(3)
+    ImpressaoTexto(f"{in_plate.get()} {in_category.get()}", 1, 8, 33)
+    AvancaPapel(3)
+    ImpressaoTexto(f"{in_model.get()}  {in_color.get()}", 1, 8, 17)
+    AvancaPapel(3)
+    ImpressaoTexto(f"{datetime.now():%Y-%m-%d %H:%M}", 1, 8, 17)
+    AvancaPapel(3)
+    
+    ImpressaoCodigoBarras(2, str(code), 90, 4, 2)
+    AvancaPapel(3)
+    ImpressaoTexto("==================================================", 1, 8, 0)
+    AvancaPapel(1)
+    ImpressaoTexto("SEM TOLERÂNCIA NA PRIMEIRA HORA", 1, 8, 0)
+    AvancaPapel(1)
+    ImpressaoTexto("Horário de funcionamento:", 1, 0, 0)
+    ImpressaoTexto(config["printer_footer"], 1, 1, 0)
+    AvancaPapel(5)
     Corte(3)
+    # ------------- Impressão chave
+    ImpressaoTexto(in_plate.get(), 2, 8, 17)
+    AvancaPapel(1)
+    ImpressaoTexto(in_model.get(), 2, 8, 17)
+    AvancaPapel(1)
+    ImpressaoTexto(in_color.get(), 2, 8, 17)
+    AvancaPapel(1)
+    ImpressaoTexto(f"{datetime.now():%Y-%m-%d %H:%M}", 2, 8, 0)
+    CorteTotal(4)
+
+
+def hash_generator():
+    code = str()
+    for index in range(13):
+        code = f"{code}{str(random.randint(0, 9))}"
+    return code
+
 
 def insert_parking(event):
     current_plate = in_plate.get()
@@ -190,7 +255,7 @@ def insert_parking(event):
     else:
         parking_model = ParkingModel(
             plate=current_plate,
-            regNumber=123123,
+            barcode=hash_generator(),
             model=in_model.get(),
             category=in_category.get(),
             color=in_color.get(),
@@ -199,6 +264,7 @@ def insert_parking(event):
         )
         post_parking(parking_model)
         calc_total_count()
+        print_parking(parking_model.barcode)
         in_plate.set("")
         in_model.set("")
         in_category.set("")
@@ -206,13 +272,12 @@ def insert_parking(event):
         update_in_grid()
         update_out_grid()
         in_plate_entry.focus()
-        print_parking()
 
 
 def ending_parking(status):
     if status == "FINALIZAR":
         plateID = out_plate.get()
-        finalize_parking(plateID, delta_time_value.get())
+        finalize_parking(plateID, delta_time_value.get(), active_user_name.get())
         close_exit_tab()
     elif status == "DESISTIR":
         confirmation = mb.askyesno("CONFIRMAR", "Você deseja aplicar a desistência nesse veículo?")
@@ -349,6 +414,17 @@ def check_element(event, element):
             return parking
         else:
             mb.showwarning("ALERTA", "Placa não encontrada")
+    elif element == "barcode":
+        code = barcode.get()
+        parking = get_parking_by_code(code)
+        if parking:
+            out_plate.set(parking["plate"])
+            out_model.set(parking["model"])
+            out_category.set(parking["category"])
+            out_color.set(parking["color"])
+            open_exit_tab("barcode")
+        else:
+            mb.showwarning("ALERTA", "Código não encontrado")
 
 
 def enter_ent_button_focus(event):
@@ -364,6 +440,7 @@ def clear_data(element):
         in_plate_entry.focus()
     if "out" in element:
         out_plate.set("")
+        barcode.set("")
         out_model.set("")
         out_category.set("")
         out_color.set("")
@@ -405,7 +482,11 @@ def calc_total_value(delta_hours: int, delta_minutes: int):
         value_color = "deep pink"
     factor = delta_hours if delta_hours!=0 else 1
     total = format(float(category_info["price"]*factor), '.2f')
-    if float(category_info["price"]*delta_hours) >= category_info["daily_price"]:
+    if "MOTO" in category_info["id"]:
+        deily_price = "daily_price_moto"
+    else:
+        deily_price = "daily_price_vehicle"
+    if float(category_info["price"]*delta_hours) >= config_info[deily_price]:
         value_color = "saddle brown"
         total = format(float(category_info["daily_price"]), '.2f')
     value_received.set(total)
@@ -450,8 +531,20 @@ def close_exit_tab():
     if active_user_role == "admin":
         root_notebook.tab(config_tab, state="normal")
     clear_data("out")
-    out_plate_entry.focus()
+    out_barcode_entry.focus()
 
+
+def add_element(element: str):
+    if element == "model":
+        model = ModelModel(id=new_model_name.get(), category=new_model_category.get())
+        post_model(**model)
+    elif element == "category":
+        category = CategoryModel(name=new_category_name.get(), price=new_category_price.get())
+        post_category(**category)
+    elif element == "color":
+        color = ColorModel(id=new_color_name.get())
+        post_category(**category)
+        
 # -----------------------------------------------------------------------------------------------------------
 # NOTEBOOK CONFIG
 # -----------------------------------------------------------------------------------------------------------
@@ -467,6 +560,8 @@ exit_tab = ttk.Frame(root_notebook)
 root_notebook.add(exit_tab, text="Finalizar veículo", state="hidden")
 config_tab = ttk.Frame(root_notebook)
 root_notebook.add(config_tab, text="Configurações", state="hidden")
+report_tab = ttk.Frame(root_notebook)
+root_notebook.add(report_tab, text="Relatórios", state="hidden")
 user_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
 user_frame.place(relx=0.98, y=0, anchor=NE)
 user_name_label = ttk.Label(user_frame, text="Usuário:", font=('Arial', 13, 'bold'))
@@ -603,7 +698,7 @@ in_color_label = ttk.Label(in_frame_center, text="Cor", font=('Arial', 18, 'bold
 out_title = ttk.Label(out_frame_top, text="SAÍDA", justify="center", font=('Arial', 20, 'bold'))
 out_plate_entry = ttk.Entry(out_frame_center_top, width=10, font=('Arial', 20, 'bold'), textvariable=out_plate)
 out_plate_label = ttk.Label(out_frame_center_top, text="Placa", font=('Arial', 18, 'bold'))
-out_barcode_entry = ttk.Entry(out_frame_center_top, width=10, font=('Arial', 20, 'bold'), textvariable=barcode)
+out_barcode_entry = ttk.Entry(out_frame_center_top, width=15, font=('Arial', 20, 'bold'), textvariable=barcode)
 out_barcode_label = ttk.Label(out_frame_center_top, text="Código de barras", font=('Arial', 18, 'bold'))
 out_model_label = ttk.Label(out_frame_center_bottom, text="Modelo: ", font=('Arial', 18, 'bold'))
 out_model_value = ttk.Label(out_frame_center_bottom, textvariable=out_model, font=('Arial', 18, 'bold'), width=12)
@@ -687,10 +782,10 @@ in_confirm_button.pack(side=RIGHT)
 in_clear_button.pack(side=LEFT)
 
 out_title.pack(side=TOP)
-out_plate_label.grid(column=1, row=1, sticky=W, padx=10, pady=10)
-out_plate_entry.grid(column=2, row=1, sticky=W, padx=10, pady=10)
-out_barcode_label.grid(column=3, row=1, sticky=W, padx=10, pady=10)
-out_barcode_entry.grid(column=4, row=1, sticky=W, padx=10, pady=10)
+out_barcode_label.grid(column=1, row=1, sticky=W, padx=10, pady=10)
+out_barcode_entry.grid(column=2, row=1, sticky=W, padx=10, pady=10)
+out_plate_label.grid(column=3, row=1, sticky=W, padx=10, pady=10)
+out_plate_entry.grid(column=4, row=1, sticky=W, padx=10, pady=10)
 out_model_label.grid(column=1, row=2, sticky=W, pady=10, padx=10)
 out_model_value.grid(column=2, row=2, sticky=W, pady=10)
 out_category_label.grid(column=3, row=2, sticky=W, pady=10)
@@ -707,6 +802,10 @@ out_finalize_button.pack(side=LEFT, pady=5)
 out_plate_entry.bind("<Return>", lambda event: check_element(event, "out plate"))
 out_plate_entry.bind("<Tab>", lambda event: check_element(event, "out plate"))
 out_plate_entry.bind("<KP_Enter>", lambda event: check_element(event, "out plate"))
+
+out_barcode_entry.bind("<Return>", lambda event: check_element(event, "barcode"))
+out_barcode_entry.bind("<Tab>", lambda event: check_element(event, "barcode"))
+out_barcode_entry.bind("<KP_Enter>", lambda event: check_element(event, "barcode"))
 
 in_plate_entry.bind("<Return>", lambda event: check_element(event, "in plate"))
 in_plate_entry.bind("<Tab>", lambda event: check_element(event, "in plate"))
@@ -793,10 +892,10 @@ addition_entry_exit_tab = ttk.Entry(
     textvariable=addition,
     width=10,
 )
+
 # -----------------------------------------------------------------------------------------------------------
 # EXIT TAB COMMANDS
 # -----------------------------------------------------------------------------------------------------------
-
 total_received_entry_exit_tab.bind("<Return>", calc_change)
 total_received_entry_exit_tab.bind("<Tab>", calc_change)
 total_received_entry_exit_tab.bind("<KP_Enter>", calc_change)
@@ -809,6 +908,7 @@ discount_entry_exit_tab.bind("<Return>", lambda event: apply_add_and_discount(ev
 discount_entry_exit_tab.bind("<Tab>", lambda event: apply_add_and_discount(event, "DISC"))
 discount_entry_exit_tab.bind("<KP_Enter>", lambda event: apply_add_and_discount(event, "DISC"))
 discount_entry_exit_tab.bind("<Button-1>", on_click)
+
 # -----------------------------------------------------------------------------------------------------------
 # EXIT TAB LAYOUT
 # -----------------------------------------------------------------------------------------------------------
@@ -838,6 +938,128 @@ discount_label_exit_tab.place(relx=0.3, y=450, anchor=NW)
 discount_entry_exit_tab.place(relx=0.3, y=500, anchor=NW)
 addition_label_exit_tab.place(relx=0.3, y=550, anchor=NW)
 addition_entry_exit_tab.place(relx=0.3, y=600, anchor=NW)
+
+# -----------------------------------------------------------------------------------------------------------
+# CONFIG TAB WIDGETS
+# -----------------------------------------------------------------------------------------------------------
+add_model_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_model_title = ttk.Label(add_model_frame, text="ADICIONAR NOVO MODELO", justify="center", font=('Arial', 14, 'bold'))
+add_model_name = ttk.Label(add_model_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
+add_model_entry = ttk.Entry(add_model_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_model_name)
+add_model_category = ttk.Label(add_model_frame, text="CATEGORIA:", justify="center", font=('Arial', 14, 'bold'))
+add_model_category_comb = AutocompleteCombobox(add_model_frame, completevalues=get_all_categories())
+add_model_button = Button(
+    add_model_frame,
+    text="Adicionar",
+    command=lambda element="model": add_element(element=element),
+    font=('Arial', 14, 'bold'),
+    bg="royalblue",
+    activebackground="coral1",
+    width=16,
+    cursor="hand2"
+)
+add_category_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_category_title = ttk.Label(add_category_frame, text="ADICIONAR NOVA CATEGORIA", justify="center", font=('Arial', 14, 'bold'))
+add_category_name = ttk.Label(add_category_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
+add_category_name_entry = ttk.Entry(add_category_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_category_name)
+add_category_price = ttk.Label(add_category_frame, text="VALOR DA HORA:", justify="center", font=('Arial', 14, 'bold'))
+add_category_price_entry = ttk.Entry(add_category_frame, width=10, font=('Arial', 14, 'bold'), textvariable=new_category_price)
+add_category_button = Button(
+    add_category_frame,
+    text="Adicionar",
+    command=lambda element="category": add_element(element=element),
+    font=('Arial', 14, 'bold'),
+    bg="royalblue",
+    activebackground="coral1",
+    width=16,
+    cursor="hand2"
+)
+add_color_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_color_title = ttk.Label(add_color_frame, text="ADICIONAR NOVA COR", justify="center", font=('Arial', 14, 'bold'))
+add_color_name = ttk.Label(add_color_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
+add_color_name_entry = ttk.Entry(add_color_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_color_name)
+add_color_button = Button(
+    add_color_frame,
+    text="Adicionar",
+    command=lambda element="color": add_element(element=element),
+    font=('Arial', 14, 'bold'),
+    bg="royalblue",
+    activebackground="coral1",
+    width=16,
+    cursor="hand2"
+)
+add_status_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_status_title = ttk.Label(add_status_frame, text="ADICIONAR NOVO STATUS", justify="center", font=('Arial', 14, 'bold'))
+add_status_name = ttk.Label(add_status_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
+add_status_name_entry = ttk.Entry(add_status_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_status)
+add_status_button = Button(
+    add_status_frame,
+    text="Adicionar",
+    command=lambda element="status": add_element(element=element),
+    font=('Arial', 14, 'bold'),
+    bg="royalblue",
+    activebackground="coral1",
+    width=16,
+    cursor="hand2"
+)
+add_user_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_user_title = ttk.Label(add_user_frame, text="ADICIONAR NOVO USUÁRIO", justify="center", font=('Arial', 14, 'bold'))
+add_user_name = ttk.Label(add_user_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
+add_user_name_entry = ttk.Entry(add_user_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_user_name)
+add_user_pass = ttk.Label(add_user_frame, text="SENHA:", justify="center", font=('Arial', 14, 'bold'))
+add_user_pass_entry = ttk.Entry(add_user_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_user_password)
+add_user_role = ttk.Label(add_user_frame, text="PERMISSÃO:", justify="center", font=('Arial', 14, 'bold'))
+add_user_role_comb = AutocompleteCombobox(add_user_frame, completevalues=["ADMIM", "CAIXA"])
+add_user_button = Button(
+    add_user_frame,
+    text="Adicionar",
+    command=lambda element="user": add_element(element=element),
+    font=('Arial', 14, 'bold'),
+    bg="royalblue",
+    activebackground="coral1",
+    width=16,
+    cursor="hand2"
+)
+# -----------------------------------------------------------------------------------------------------------
+# CONFIG TAB LAYOUT
+# -----------------------------------------------------------------------------------------------------------
+add_model_frame.place(x=10, y=20, height=150, width=350)
+add_model_title.place(relx=0.5, y=5, anchor=CENTER)
+add_model_name.place(x=5, y=25, anchor=NW)
+add_model_entry.place(x=80, y=24, anchor=NW)
+add_model_category.place(x=5, y=65, anchor=NW)
+add_model_category_comb.place(x=140, y=65, anchor=NW)
+add_model_button.place(relx=0.5, y=120, anchor=CENTER)
+
+add_category_frame.place(x=10, y=200, height=150, width=350)
+add_category_title.place(relx=0.5, y=5, anchor=CENTER)
+add_category_name.place(x=5, y=25, anchor=NW)
+add_category_name_entry.place(x=80, y=24, anchor=NW)
+add_category_price.place(x=5, y=65, anchor=NW)
+add_category_price_entry.place(x=190, y=64, anchor=NW)
+add_category_button.place(relx=0.5, y=120, anchor=CENTER)
+
+add_color_frame.place(x=10, y=380, height=100, width=350)
+add_color_title.place(relx=0.5, y=5, anchor=CENTER)
+add_color_name.place(x=5, y=25, anchor=NW)
+add_color_name_entry.place(x=80, y=24, anchor=NW)
+add_color_button.place(relx=0.5, y=70, anchor=CENTER)
+
+add_status_frame.place(x=10, y=510, height=100, width=350)
+add_status_title.place(relx=0.5, y=5, anchor=CENTER)
+add_status_name.place(x=5, y=25, anchor=NW)
+add_status_name_entry.place(x=80, y=24, anchor=NW)
+add_status_button.place(relx=0.5, y=70, anchor=CENTER)
+
+add_user_frame.place(x=380, y=20, height=200, width=350)
+add_user_title.place(relx=0.5, y=5, anchor=CENTER)
+add_user_name.place(x=5, y=25, anchor=NW)
+add_user_name_entry.place(x=80, y=24, anchor=NW)
+add_user_pass.place(x=5, y=65, anchor=NW)
+add_user_pass_entry.place(x=80, y=64, anchor=NW)
+add_user_role.place(x=5, y=105, anchor=NW)
+add_user_role_comb.place(x=130, y=104, anchor=NW)
+add_user_button.place(relx=0.5, y=160, anchor=CENTER)
 
 if __name__ == "__main__":
     open_printer_connection()

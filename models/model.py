@@ -11,12 +11,12 @@ def get_all_models():
     return models
 
 
-def post_model(model: ModelModel):
+def post_model(modelModel: ModelModel):
     with get_dal_mysql() as db:
-        model = db(db.model.id==model.id).select().first()
+        model = db(db.model.id==modelModel.id).select().first()
         if model:
-            raise Exception(detail="Esta categoria já existe")
-        new = db.model.insert(**model.model_dump())
+            raise Exception(detail="Este modelo já existe")
+        new = db.model.insert(**modelModel.model_dump())
     return new
 
 

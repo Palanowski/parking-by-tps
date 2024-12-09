@@ -3,6 +3,7 @@
 
 #---env files---
 .env
+env
 
 # Python temp files
 __pycache__/
