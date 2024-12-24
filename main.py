@@ -614,6 +614,7 @@ def add_element(element: str):
         elif "color" in element:
             delete_color(new_color_name.get())
             update_completion_list("color")
+            mb.showwarning("SUCESSO", f"Cor {new_category_name.get()} removida com sucesso.")
         elif "users" in element:
             delete_user(new_user_name.get())
             update_completion_list("users")
