@@ -32,6 +32,7 @@ def get_today_parkings_as_df_in():
             db.parking.status,
             db.parking.total_value,
             db.parking.entry_user,
+            db.parking.exit_user,
             db.parking.discount,
             db.parking.addition,
         ).as_list()
@@ -85,18 +86,32 @@ def get_total_open_parking():
             & (db.parking.entry_date==datetime.now().date())
         ).count()
 
-def finalize_parking(plateID, delta_time, userID):
+def finalize_parking(plateID, delta_time, userID, total, addition=None, discount=None, byPlate=None):
     with get_dal_mysql() as db:
-        entry_time = db(db.parking.plate == plateID).select(db.parking.entry_time).first()
         exit_time = datetime.now().time()
-        db(db.parking.plate == plateID).update(
+        db((db.parking.plate == plateID) & (db.parking.entry_date == datetime.now().date())).update(
             exit_user=userID,
             exit_time=exit_time,
             delta_time=delta_time,
+            total_value=total,
             status="FINALIZADO",
+            addition=addition,
+            discount=discount,
+            byPlate=byPlate,
         )
 
 
 def cancel_parking(plateID):
     with get_dal_mysql() as db:
-        db(db.parking.plate == plateID).update(exit_time=datetime.now().time(), status="CANCELADO")
+        db(
+            (db.parking.plate == plateID)
+            & (db.parking.entry_date==datetime.now().date())
+        ).update(exit_time=datetime.now().time(), status="CANCELADO")
+
+
+def return_parking(plateID):
+    with get_dal_mysql() as db:
+        db(
+            (db.parking.plate == plateID)
+            & (db.parking.entry_date==datetime.now().date())
+        ).update(ISreturn=True, status="RETORNO")

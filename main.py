@@ -1,4 +1,3 @@
-import ctypes
 import random
 import re
 from datetime import datetime, timedelta
@@ -6,18 +5,18 @@ import tkinter.ttk as ttk
 from tkinter import *
 from tkinter.constants import *
 from tkinter import messagebox as mb
-from ttkwidgets.autocomplete import AutocompleteEntry, AutocompleteCombobox, AutocompleteEntryListbox
+from ttkwidgets.autocomplete import AutocompleteCombobox
 
-from models.color import get_colors
-from models.category import check_category, get_all_categories, post_category
-from models.config import get_config
-from models.model import check_model, get_all_models, post_model
+from models.color import *
+from models.category import *
+from models.config import *
+from models.model import *
 from models.parking import *
+from models.status import *
 from models.users import *
 from models.impressora import *
 
 from schemas.category import CategoryModel
-from schemas.color import ColorModel
 from schemas.model import ModelModel
 from schemas.parking import ParkingModel
 from schemas.users import UsersModel
@@ -50,10 +49,15 @@ new_model_category = StringVar()
 
 new_category_name = StringVar()
 new_category_price = StringVar()
+new_category_daily_price = StringVar()
 
 new_color_name = StringVar()
 
 new_status = StringVar()
+
+new_tolerance = IntVar()
+new_header = StringVar()
+new_footer = StringVar()
 
 config_tolerance = StringVar()
 config_daily_price = StringVar()
@@ -67,7 +71,8 @@ in_category = StringVar()
 in_color = StringVar()
 in_time = StringVar()
 
-barcode = StringVar(value="")
+barcodeVar = StringVar(value="")
+byPlateVar = BooleanVar()
 out_plate = StringVar(value="")
 out_model = StringVar(value="")
 out_category = StringVar(value="")
@@ -80,6 +85,7 @@ value_received = StringVar()
 change_value = StringVar(value="0.00")
 addition = StringVar(value="0.00")
 discount = StringVar(value="0.00")
+out_quit_return_button = StringVar(value="Desistência")
 
 order = True
 header_in = [
@@ -104,6 +110,13 @@ header_out = [
     "Permanência",
     "Total",
 ]
+
+font13 = ('Arial', 13, 'bold')
+font14 = ('Arial', 14, 'bold')
+font18 = ('Arial', 18, 'bold')
+font20 = ('Arial', 20, 'bold')
+font45 = ('Arial', 45, 'bold')
+
 phrase = [
     "A alegria do coração transparece no rosto, mas o coração angustiado oprime o espírito. - Provérbios 15:13",
     "Regozija-te e alegra-te, porque o Senhor tem feito grandes coisas. - Joel 2:21",
@@ -130,7 +143,11 @@ phrase = [
     "Os preceitos do Senhor são justos e dão alegria ao coração. Os mandamentos do Senhor são límpidos e trazem luz aos olhos. - Salmos 19:8"
 ]
 # AUXILIARY FUNCTIONS
-
+def update_completion_list(element):
+    if "model" in element:
+        models = get_all_models()
+        in_model_entry._completion_list=models
+        add_model_entry._completion_list=models
 
 def calc_total_count():
     prefix = random.randint(1000, 9999)
@@ -193,7 +210,7 @@ def notebook_tab_selection(event):
 def open_printer_connection():
     AbreConexaoImpressora(
         1,
-        "I8",
+        "I9",
         "USB",
         0
     )
@@ -218,7 +235,7 @@ def print_parking(code):
     ImpressaoTexto(f"{datetime.now():%Y-%m-%d %H:%M}", 1, 8, 17)
     AvancaPapel(3)
     
-    ImpressaoCodigoBarras(2, str(code), 90, 4, 2)
+    ImpressaoCodigoBarras(3, str(code), 80, 3, 4)
     AvancaPapel(3)
     ImpressaoTexto("==================================================", 1, 8, 0)
     AvancaPapel(1)
@@ -226,9 +243,10 @@ def print_parking(code):
     AvancaPapel(1)
     ImpressaoTexto("Horário de funcionamento:", 1, 0, 0)
     ImpressaoTexto(config["printer_footer"], 1, 1, 0)
-    AvancaPapel(5)
+    AvancaPapel(1)
     Corte(3)
     # ------------- Impressão chave
+    AvancaPapel(3)
     ImpressaoTexto(in_plate.get(), 2, 8, 17)
     AvancaPapel(1)
     ImpressaoTexto(in_model.get(), 2, 8, 17)
@@ -240,8 +258,8 @@ def print_parking(code):
 
 
 def hash_generator():
-    code = str()
-    for index in range(13):
+    code = "42"
+    for index in range(6):
         code = f"{code}{str(random.randint(0, 9))}"
     return code
 
@@ -277,13 +295,26 @@ def insert_parking(event):
 def ending_parking(status):
     if status == "FINALIZAR":
         plateID = out_plate.get()
-        finalize_parking(plateID, delta_time_value.get(), active_user_name.get())
+        finalize_parking(
+            plateID,
+            delta_time_value.get(),
+            active_user_name.get(),
+            total_value.get(),
+            addition.get(),
+            discount.get(),
+            byPlateVar.get(),
+        )
         close_exit_tab()
-    elif status == "DESISTIR":
-        confirmation = mb.askyesno("CONFIRMAR", "Você deseja aplicar a desistência nesse veículo?")
+    elif status == "DESISTIR|RETORNAR":
+        confirmation = mb.askyesno("CONFIRMAR", f"Você deseja aplicar a {out_quit_return_button.get()} nesse veículo?")
         if confirmation:
-            plateID = out_plate.get()
-            cancel_parking(plateID)
+            if "Desist" in out_quit_return_button.get():
+                plateID = out_plate.get()
+                cancel_parking(plateID)
+            elif out_quit_return_button.get() == "Retorno":
+                plateID = out_plate.get()
+                return_parking(plateID)
+                
     update_in_grid()
     update_out_grid()
 
@@ -340,7 +371,7 @@ def mount_in_table():
         in_table.heading(col, text=col, command=lambda col=col : sort_in_table(col))
     for row in rows:
         values = [value for value in row]
-        if values[7] == "EM ABERTO":
+        if (values[7] == "EM ABERTO") or (values[7] == "RETORNO"):
             bg_tag = "green"
         elif values[7] == "FINALIZADO":
             bg_tag = "gray"
@@ -410,19 +441,27 @@ def check_element(event, element):
             out_model.set(parking["model"])
             out_category.set(parking["category"])
             out_color.set(parking["color"])
-            out_finalize_button.focus()
-            return parking
+            byPlateVar.set(True)
+            if parking["status"] != "EM ABERTO":
+                out_quit_return_button.set("Retorno")
+                out_cancel_button.focus()
+            else:
+                out_finalize_button.focus()
         else:
             mb.showwarning("ALERTA", "Placa não encontrada")
     elif element == "barcode":
-        code = barcode.get()
+        code = barcodeVar.get()
         parking = get_parking_by_code(code)
         if parking:
             out_plate.set(parking["plate"])
             out_model.set(parking["model"])
             out_category.set(parking["category"])
             out_color.set(parking["color"])
-            open_exit_tab("barcode")
+            byPlateVar.set(False)
+            if parking["status"] != "EM ABERTO":
+                out_quit_return_button.set("Retorno")
+            else:
+                open_exit_tab("barcode")
         else:
             mb.showwarning("ALERTA", "Código não encontrado")
 
@@ -440,7 +479,7 @@ def clear_data(element):
         in_plate_entry.focus()
     if "out" in element:
         out_plate.set("")
-        barcode.set("")
+        barcodeVar.set("")
         out_model.set("")
         out_category.set("")
         out_color.set("")
@@ -501,8 +540,8 @@ def calc_total_value(delta_hours: int, delta_minutes: int):
 
 
 def open_exit_tab(event):
-    parking = check_element("out", element="out plate")
-    if parking["status"] == "EM ABERTO":
+    parking = get_parking_by_plate(out_plate.get())
+    if (parking["status"] == "EM ABERTO") or (parking["status"] == "RETORNO"):
         root_notebook.tab(exit_tab, state="normal")
         root_notebook.select(exit_tab)
         root_notebook.tab(login_tab, state="hidden")
@@ -535,16 +574,52 @@ def close_exit_tab():
 
 
 def add_element(element: str):
-    if element == "model":
-        model = ModelModel(id=new_model_name.get(), category=new_model_category.get())
-        post_model(**model)
-    elif element == "category":
-        category = CategoryModel(name=new_category_name.get(), price=new_category_price.get())
-        post_category(**category)
-    elif element == "color":
-        color = ColorModel(id=new_color_name.get())
-        post_category(**category)
-        
+    if "ADD" in element:
+        if "model" in element:
+            model = ModelModel(id=new_model_name.get(), category=add_model_category_comb.get())
+            update_or_insert_model(model)
+            update_completion_list("model")
+            mb.showwarning("SUCESSO", f"Modelo {model.id} adicionado/atualizado com sucesso.")
+        elif "category" in element:
+            category = CategoryModel(id=new_category_name.get(), price=new_category_price.get())
+            update_or_insert_category(category)
+            update_completion_list("category")
+            mb.showwarning("SUCESSO", f"Categoria {category.id} adicionada/atualizada com sucesso.")
+        elif "color" in element:
+            update_or_insert_color(new_color_name.get())
+            update_completion_list("color")
+            mb.showwarning("SUCESSO", f"Cor {new_color_name.get()} adicionada com sucesso.")
+        elif "users" in element:
+            user = UsersModel(name=new_user_name.get(), password=new_user_password.get(), role=new_user_role.get())
+            update_or_insert_user(user)
+            update_completion_list("users")
+            mb.showwarning("SUCESSO", f"Usuário {user.name} adicionado/atualizado com sucesso.")
+        elif "status" in element:
+            update_or_insert_status(new_status.get())
+            update_completion_list("status")
+            mb.showwarning("SUCESSO", f"Status {new_color_name.get()} adicionado com sucesso.")
+        elif "config" in element:
+            update_config(tolerance=new_tolerance.get(), header=new_header.get(), footer=new_footer.get())
+            update_completion_list("config")
+            mb.showwarning("SUCESSO", "Configurações gerais atualizadas com sucesso.")
+    elif "RMV" in element:
+        if "model" in element:
+            delete_model(new_model_name.get())
+            update_completion_list("model")
+            mb.showwarning("SUCESSO", f"Modelo {new_model_name.get()} removido com sucesso.")
+        elif "category" in element:
+            delete_category(new_category_name.get())
+            update_completion_list("category")
+            mb.showwarning("SUCESSO", f"Categoria {new_category_name.get()} removida com sucesso.")
+        elif "color" in element:
+            delete_color(new_color_name.get())
+            update_completion_list("color")
+        elif "users" in element:
+            delete_user(new_user_name.get())
+            update_completion_list("users")
+        elif "status" in element:
+            delete_status(new_status.get())
+            update_completion_list("status")
 # -----------------------------------------------------------------------------------------------------------
 # NOTEBOOK CONFIG
 # -----------------------------------------------------------------------------------------------------------
@@ -564,39 +639,40 @@ report_tab = ttk.Frame(root_notebook)
 root_notebook.add(report_tab, text="Relatórios", state="hidden")
 user_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
 user_frame.place(relx=0.98, y=0, anchor=NE)
-user_name_label = ttk.Label(user_frame, text="Usuário:", font=('Arial', 13, 'bold'))
+user_name_label = ttk.Label(user_frame, text="Usuário:", font=font13)
 user_name_label.pack(side=LEFT)
-active_user_label = ttk.Label(user_frame, textvariable=active_user_name, font=('Arial', 13, 'bold'))
+active_user_label = ttk.Label(user_frame, textvariable=active_user_name, font=font13)
 active_user_label.pack(side=LEFT)
 count_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
 count_frame.place(relx=0.5, y=0, anchor=NE)
-count_total_label = ttk.Label(count_frame, textvariable=total_count, font=('Arial', 13, 'bold'))
+count_total_label = ttk.Label(count_frame, textvariable=total_count, font=font13)
 count_total_label.pack(side=LEFT)
 
 # -----------------------------------------------------------------------------------------------------------
 # LOGIN TAB WIDJETS
 # -----------------------------------------------------------------------------------------------------------
-login_entry = AutocompleteCombobox(login_tab, font=('Arial', 20, 'bold'),textvariable=login, completevalues=get_all_users())
+login_entry = AutocompleteCombobox(login_tab, font=font20,textvariable=login, completevalues=get_all_users())
 # login_entry = AutocompleteEntry(
 #     login_tab,
-#     font=('Arial', 20, 'bold'),
+#     font=font20,
 #     textvariable=login,
 #     completevalues=get_all_users()
 # )
 password_entry = ttk.Entry(
     login_tab,
-    font=('Arial', 20, 'bold'),
+    font=font20,
     textvariable=password,
     show="*"
 )
 login_button = Button(
     login_tab,
     text="Entrar",
-    font=('Arial', 18, 'bold'),
+    font=font18,
     command= lambda click="login click": login_verification(click),
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    activeforeground="white",
+    activeforeground="black",
     height=2,
     width=15,
     cursor="hand2"
@@ -639,46 +715,47 @@ report_out_frame = ttk.Frame(parking_tab, borderwidth=2, relief="sunken")
 # -----------------------------------------------------------------------------------------------------------
 in_plate_entry = ttk.Entry(
     in_frame_center,
-    font=('Arial', 20, 'bold'),
+    font=font20,
     textvariable=in_plate,
     width=18,
 )
 in_model_entry = AutocompleteCombobox(
     in_frame_center,
-    font=('Arial', 20, 'bold'),
+    font=font20,
     completevalues=get_all_models(),
     textvariable=in_model,
     width=18,
 )
 in_category_entry = AutocompleteCombobox(
     in_frame_center,
-    font=('Arial', 20, 'bold'),
+    font=font20,
     completevalues=get_all_categories(),
     textvariable=in_category,
     width=18,
 )
 in_color_entry = AutocompleteCombobox(
     in_frame_center,
-    font=('Arial', 20, 'bold'),
-    completevalues=get_colors(),
+    font=font20,
+    completevalues=get_all_colors(),
     textvariable=in_color,
     width=18,
 )
 in_confirm_button = Button(
     in_frame_bottom,
     text="Entrar",
-    font=('Arial', 18, 'bold'),
+    font=font18,
     command= lambda event="confirm": insert_parking(event),
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    activeforeground="white",
+    activeforeground="black",
     width=15,
     cursor="hand2"
 )
 in_clear_button = Button(
     in_frame_bottom,
     text="Limpar",
-    font=('Arial', 18, 'bold'),
+    font=font18,
     command=lambda element="in": clear_data(element),
     bg="lightblue",
     activebackground="coral1",
@@ -686,40 +763,42 @@ in_clear_button = Button(
     width=15,
     cursor="hand2"
 )
-in_title = ttk.Label(in_frame_top, text="ENTRADA", justify="right", font=('Arial', 20, 'bold'))
-in_plate_label = ttk.Label(in_frame_center, text="Placa", font=('Arial', 18, 'bold'))
-in_model_label = ttk.Label(in_frame_center, text="Modelo", font=('Arial', 18, 'bold'))
-in_category_label = ttk.Label(in_frame_center, text="Categoria", font=('Arial', 18, 'bold'))
-in_color_label = ttk.Label(in_frame_center, text="Cor", font=('Arial', 18, 'bold'))
+in_title = ttk.Label(in_frame_top, text="ENTRADA", justify="right", font=font20)
+in_plate_label = ttk.Label(in_frame_center, text="Placa", font=font18)
+in_model_label = ttk.Label(in_frame_center, text="Modelo", font=font18)
+in_category_label = ttk.Label(in_frame_center, text="Categoria", font=font18)
+in_color_label = ttk.Label(in_frame_center, text="Cor", font=font18)
 
 # -----------------------------------------------------------------------------------------------------------
 # PARKING TAB WIDJETS - EXIT
 # -----------------------------------------------------------------------------------------------------------
-out_title = ttk.Label(out_frame_top, text="SAÍDA", justify="center", font=('Arial', 20, 'bold'))
-out_plate_entry = ttk.Entry(out_frame_center_top, width=10, font=('Arial', 20, 'bold'), textvariable=out_plate)
-out_plate_label = ttk.Label(out_frame_center_top, text="Placa", font=('Arial', 18, 'bold'))
-out_barcode_entry = ttk.Entry(out_frame_center_top, width=15, font=('Arial', 20, 'bold'), textvariable=barcode)
-out_barcode_label = ttk.Label(out_frame_center_top, text="Código de barras", font=('Arial', 18, 'bold'))
-out_model_label = ttk.Label(out_frame_center_bottom, text="Modelo: ", font=('Arial', 18, 'bold'))
-out_model_value = ttk.Label(out_frame_center_bottom, textvariable=out_model, font=('Arial', 18, 'bold'), width=12)
-out_category_label = ttk.Label(out_frame_center_bottom, text="Categoria: ", font=('Arial', 18, 'bold'))
-out_category_value = ttk.Label(out_frame_center_bottom, textvariable=out_category, font=('Arial', 18, 'bold'), width=12)
-out_color_label = ttk.Label(out_frame_center_bottom, text="Cor: ", font=('Arial', 18, 'bold'))
-out_color_value = ttk.Label(out_frame_center_bottom, textvariable=out_color, font=('Arial', 18, 'bold'), width=13)
+out_title = ttk.Label(out_frame_top, text="SAÍDA", justify="center", font=font20)
+out_plate_entry = ttk.Entry(out_frame_center_top, width=10, font=font20, textvariable=out_plate)
+out_plate_label = ttk.Label(out_frame_center_top, text="Placa", font=font18)
+out_barcode_entry = ttk.Entry(out_frame_center_top, width=15, font=font20, textvariable=barcodeVar)
+out_barcode_label = ttk.Label(out_frame_center_top, text="Código de barras", font=font18)
+out_model_label = ttk.Label(out_frame_center_bottom, text="Modelo: ", font=font18)
+out_model_value = ttk.Label(out_frame_center_bottom, textvariable=out_model, font=font18, width=12)
+out_category_label = ttk.Label(out_frame_center_bottom, text="Categoria: ", font=font18)
+out_category_value = ttk.Label(out_frame_center_bottom, textvariable=out_category, font=font18, width=12)
+out_color_label = ttk.Label(out_frame_center_bottom, text="Cor: ", font=font18)
+out_color_value = ttk.Label(out_frame_center_bottom, textvariable=out_color, font=font18, width=13)
 out_finalize_button = Button(
     out_frame_bottom,
     text="Finalizar",
     command=lambda event="Return": open_exit_tab(event),
-    font=('Arial', 18, 'bold'),
+    font=font18,
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
+    activeforeground="black",
     width=16,
     cursor="hand2"
 )
 out_clear_button = Button(
     out_frame_bottom,
     text="Limpar",
-    font=('Arial', 18, 'bold'),
+    font=font18,
     command=lambda element="out": clear_data(element),
     bg="lightblue",
     activebackground="coral1",
@@ -729,9 +808,9 @@ out_clear_button = Button(
 )
 out_cancel_button = Button(
     out_frame_bottom,
-    text="Desistência",
-    font=('Arial', 18, 'bold'),
-    command= lambda status="DESISTIR": ending_parking(status),
+    textvariable=out_quit_return_button,
+    font=font18,
+    command= lambda status="DESISTIR|RETORNAR": ending_parking(status),
     bg="lightblue",
     activebackground="coral1",
     activeforeground="white",
@@ -746,13 +825,13 @@ in_table = ttk.Treeview(report_in_frame, selectmode="browse", show="headings", h
 in_table.pack(side=TOP, padx=10, pady=5)
 in_table.tag_configure("green", background="lightgreen")
 in_table.tag_configure("gray", background="lightgray")
-in_table.tag_configure("red", background="red")
+in_table.tag_configure("red", background="coral1")
 
 out_table = ttk.Treeview(report_out_frame, selectmode="browse", show="headings", height=7, columns=header_out)
 out_table.pack(side=TOP)
 out_table.tag_configure("green", background="lightgreen")
 out_table.tag_configure("gray", background="lightgray")
-out_table.tag_configure("red", background="red")
+out_table.tag_configure("red", background="coral1")
 
 # -----------------------------------------------------------------------------------------------------------
 # PARKING TAB LAYOUT
@@ -831,13 +910,13 @@ in_plate_entry.focus()
 # -----------------------------------------------------------------------------------------------------------
 # EXIT TAB WIDJETS
 # -----------------------------------------------------------------------------------------------------------
-out_plate_label_exit_tab = ttk.Label(exit_tab, text="Placa: ", font=('Arial', 45, 'bold'))
+out_plate_label_exit_tab = ttk.Label(exit_tab, text="Placa: ", font=font45)
 out_plate_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_plate, font=('Arial', 65, 'bold'))
-out_model_label_exit_tab = ttk.Label(exit_tab, text="Modelo: ", font=('Arial', 45, 'bold'))
+out_model_label_exit_tab = ttk.Label(exit_tab, text="Modelo: ", font=font45)
 out_model_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_model, font=('Arial', 65, 'bold'))
-out_color_label_exit_tab = ttk.Label(exit_tab, text="Cor: ", font=('Arial', 45, 'bold'))
+out_color_label_exit_tab = ttk.Label(exit_tab, text="Cor: ", font=font45)
 out_color_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_color, font=('Arial', 50, 'bold'))
-out_category_label_exit_tab = ttk.Label(exit_tab, text="Categoria: ", font=('Arial', 45, 'bold'))
+out_category_label_exit_tab = ttk.Label(exit_tab, text="Categoria: ", font=font45)
 out_category_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_category, font=('Arial', 55, 'bold'))
 in_time_label_exit_tab = ttk.Label(exit_tab, text="Entrada: ", font=('Arial', 30))
 in_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=in_time, font=('Arial', 35))
@@ -845,17 +924,17 @@ out_time_label_exit_tab = ttk.Label(exit_tab, text="Saída: ", font=('Arial', 30
 out_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_time, font=('Arial', 35))
 delta_time_label_exit_tab = ttk.Label(exit_tab, text="Permanência: ", font=('Arial', 30))
 delta_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=delta_time, font=('Arial', 30))
-total_label_exit_tab = ttk.Label(exit_tab, text="Total R$ ", font=('Arial', 45, 'bold'))
+total_label_exit_tab = ttk.Label(exit_tab, text="Total R$ ", font=font45)
 total_value_label_exit_tab = ttk.Label(exit_tab, textvariable=total_value, font=('Arial', 100, 'bold'))
-total_received_label_exit_tab = ttk.Label(exit_tab, text="Valor recebido:", font=('Arial', 20, 'bold'))
+total_received_label_exit_tab = ttk.Label(exit_tab, text="Valor recebido:", font=font20)
 total_received_entry_exit_tab = ttk.Entry(
     exit_tab,
-    font=('Arial', 20, 'bold'),
+    font=font20,
     textvariable=value_received,
     width=10,
 )
-change_label_exit_tab = ttk.Label(exit_tab, text="Troco:", font=('Arial', 20, 'bold'))
-change_value_label_exit_tab = ttk.Label(exit_tab, textvariable=change_value, font=('Arial', 20, 'bold'))
+change_label_exit_tab = ttk.Label(exit_tab, text="Troco:", font=font20)
+change_value_label_exit_tab = ttk.Label(exit_tab, textvariable=change_value, font=font20)
 exit_cancel_button = Button(
     exit_tab,
     text="Cancelar",
@@ -873,22 +952,23 @@ exit_finalize_button = Button(
     font=('Arial', 25, 'bold'),
     command=lambda status="FINALIZAR": ending_parking(status),
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    activeforeground="white",
+    activeforeground="black",
     width=12,
     cursor="hand2"
 )
-discount_label_exit_tab = ttk.Label(exit_tab, text="Desconto:", font=('Arial', 20, 'bold'))
+discount_label_exit_tab = ttk.Label(exit_tab, text="Desconto:", font=font20)
 discount_entry_exit_tab = ttk.Entry(
     exit_tab,
-    font=('Arial', 20, 'bold'),
+    font=font20,
     textvariable=discount,
     width=10,
 )
-addition_label_exit_tab = ttk.Label(exit_tab, text="Acréscimo:", font=('Arial', 20, 'bold'))
+addition_label_exit_tab = ttk.Label(exit_tab, text="Acréscimo:", font=font20)
 addition_entry_exit_tab = ttk.Entry(
     exit_tab,
-    font=('Arial', 20, 'bold'),
+    font=font20,
     textvariable=addition,
     width=10,
 )
@@ -943,123 +1023,234 @@ addition_entry_exit_tab.place(relx=0.3, y=600, anchor=NW)
 # CONFIG TAB WIDGETS
 # -----------------------------------------------------------------------------------------------------------
 add_model_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
-add_model_title = ttk.Label(add_model_frame, text="ADICIONAR NOVO MODELO", justify="center", font=('Arial', 14, 'bold'))
-add_model_name = ttk.Label(add_model_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
-add_model_entry = ttk.Entry(add_model_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_model_name)
-add_model_category = ttk.Label(add_model_frame, text="CATEGORIA:", justify="center", font=('Arial', 14, 'bold'))
-add_model_category_comb = AutocompleteCombobox(add_model_frame, completevalues=get_all_categories())
+add_model_title = ttk.Label(add_model_frame, text="MODELOS", justify="center", font=font14)
+add_model_name = ttk.Label(add_model_frame, text="NOME:", justify="center", font=font14)
+add_model_entry = AutocompleteCombobox(add_model_frame, width=23, font=font14, textvariable=new_model_name, completevalues=get_all_models())
+add_model_category = ttk.Label(add_model_frame, text="CATEGORIA:", justify="center", font=font14)
+add_model_category_comb = AutocompleteCombobox(add_model_frame, width=20, font=font14, completevalues=get_all_categories())
 add_model_button = Button(
     add_model_frame,
     text="Adicionar",
-    command=lambda element="model": add_element(element=element),
-    font=('Arial', 14, 'bold'),
+    command=lambda element="ADD model": add_element(element=element),
+    font=font14,
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    width=16,
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+rmv_model_button = Button(
+    add_model_frame,
+    text="Remover",
+    command=lambda element="RMV model": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
     cursor="hand2"
 )
 add_category_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
-add_category_title = ttk.Label(add_category_frame, text="ADICIONAR NOVA CATEGORIA", justify="center", font=('Arial', 14, 'bold'))
-add_category_name = ttk.Label(add_category_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
-add_category_name_entry = ttk.Entry(add_category_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_category_name)
-add_category_price = ttk.Label(add_category_frame, text="VALOR DA HORA:", justify="center", font=('Arial', 14, 'bold'))
-add_category_price_entry = ttk.Entry(add_category_frame, width=10, font=('Arial', 14, 'bold'), textvariable=new_category_price)
+add_category_title = ttk.Label(add_category_frame, text="CATEGORIAS", justify="center", font=font14)
+add_category_name = ttk.Label(add_category_frame, text="NOME:", justify="center", font=font14)
+add_category_name_entry = AutocompleteCombobox(add_category_frame, width=23, font=font14, textvariable=new_category_name, completevalues=get_all_categories())
+add_category_price = ttk.Label(add_category_frame, text="VALOR DA HORA:", justify="center", font=font14)
+add_category_price_entry = ttk.Entry(add_category_frame, width=15, font=font14, textvariable=new_category_price)
+add_category_daily_price = ttk.Label(add_category_frame, text="VALOR DA DIÁRIA:", justify="center", font=font14)
+add_category_daily_price_entry = ttk.Entry(add_category_frame, width=15, font=font14, textvariable=new_category_daily_price)
 add_category_button = Button(
     add_category_frame,
     text="Adicionar",
-    command=lambda element="category": add_element(element=element),
-    font=('Arial', 14, 'bold'),
+    command=lambda element="ADD category": add_element(element=element),
+    font=font14,
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    width=16,
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+rmv_category_button = Button(
+    add_category_frame,
+    text="Remover",
+    command=lambda element="RMV category": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
     cursor="hand2"
 )
 add_color_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
-add_color_title = ttk.Label(add_color_frame, text="ADICIONAR NOVA COR", justify="center", font=('Arial', 14, 'bold'))
-add_color_name = ttk.Label(add_color_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
-add_color_name_entry = ttk.Entry(add_color_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_color_name)
+add_color_title = ttk.Label(add_color_frame, text="CORES", justify="center", font=font14)
+add_color_name = ttk.Label(add_color_frame, text="NOME:", justify="center", font=font14)
+add_color_name_entry = AutocompleteCombobox(add_color_frame, width=23, font=font14, textvariable=new_color_name, completevalues=get_all_colors())
 add_color_button = Button(
     add_color_frame,
     text="Adicionar",
-    command=lambda element="color": add_element(element=element),
-    font=('Arial', 14, 'bold'),
+    command=lambda element="ADD color": add_element(element=element),
+    font=font14,
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    width=16,
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+rmv_color_button = Button(
+    add_color_frame,
+    text="Remover",
+    command=lambda element="RMV color": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
     cursor="hand2"
 )
 add_status_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
-add_status_title = ttk.Label(add_status_frame, text="ADICIONAR NOVO STATUS", justify="center", font=('Arial', 14, 'bold'))
-add_status_name = ttk.Label(add_status_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
-add_status_name_entry = ttk.Entry(add_status_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_status)
+add_status_title = ttk.Label(add_status_frame, text="STATUS DO VEÍCULO", justify="center", font=font14)
+add_status_name = ttk.Label(add_status_frame, text="NOME:", justify="center", font=font14)
+add_status_name_entry = AutocompleteCombobox(add_status_frame, width=23, font=font14, textvariable=new_status, completevalues=get_all_status())
 add_status_button = Button(
     add_status_frame,
     text="Adicionar",
-    command=lambda element="status": add_element(element=element),
-    font=('Arial', 14, 'bold'),
+    command=lambda element="ADD status": add_element(element=element),
+    font=font14,
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    width=16,
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+rmv_status_button = Button(
+    add_status_frame,
+    text="Remover",
+    command=lambda element="RMV status": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
     cursor="hand2"
 )
 add_user_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
-add_user_title = ttk.Label(add_user_frame, text="ADICIONAR NOVO USUÁRIO", justify="center", font=('Arial', 14, 'bold'))
-add_user_name = ttk.Label(add_user_frame, text="NOME:", justify="center", font=('Arial', 14, 'bold'))
-add_user_name_entry = ttk.Entry(add_user_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_user_name)
-add_user_pass = ttk.Label(add_user_frame, text="SENHA:", justify="center", font=('Arial', 14, 'bold'))
-add_user_pass_entry = ttk.Entry(add_user_frame, width=23, font=('Arial', 14, 'bold'), textvariable=new_user_password)
-add_user_role = ttk.Label(add_user_frame, text="PERMISSÃO:", justify="center", font=('Arial', 14, 'bold'))
-add_user_role_comb = AutocompleteCombobox(add_user_frame, completevalues=["ADMIM", "CAIXA"])
+add_user_title = ttk.Label(add_user_frame, text="USUÁRIOS", justify="center", font=font14)
+add_user_name = ttk.Label(add_user_frame, text="NOME:", justify="center", font=font14)
+add_user_name_entry = AutocompleteCombobox(add_user_frame, width=23, font=font14, textvariable=new_user_name, completevalues=get_all_users())
+add_user_pass = ttk.Label(add_user_frame, text="SENHA:", justify="center", font=font14)
+add_user_pass_entry = ttk.Entry(add_user_frame, width=23, font=font14, textvariable=new_user_password)
+add_user_role = ttk.Label(add_user_frame, text="PERMISSÃO:", justify="center", font=font14)
+add_user_role_comb = AutocompleteCombobox(add_user_frame, width=20, font=font14, completevalues=["ADMIM", "CAIXA"])
 add_user_button = Button(
     add_user_frame,
     text="Adicionar",
-    command=lambda element="user": add_element(element=element),
-    font=('Arial', 14, 'bold'),
+    command=lambda element="ADD user": add_element(element=element),
+    font=font14,
     bg="royalblue",
+    fg="white",
     activebackground="coral1",
-    width=16,
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+rmv_user_button = Button(
+    add_user_frame,
+    text="Remover",
+    command=lambda element="RMV user": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+add_config_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_config_title = ttk.Label(add_config_frame, text="CONFIGURAÇÕES GERAIS", justify="center", font=font14)
+add_config_tolerance = ttk.Label(add_config_frame, text="TOLERÂNCIA EM MINUTOS:", justify="center", font=font14)
+add_config_tolerance_entry = ttk.Entry(add_config_frame, width=7, font=font14, textvariable=new_tolerance)
+add_config_header = ttk.Label(add_config_frame, text="CABEÇALHO DE IMPRESSÃO:", justify="center", font=font13)
+add_config_header_value = Text(add_config_frame, height=12, width=44, borderwidth=2)
+add_config_footer = ttk.Label(add_config_frame, text="RODAPÉ DE IMPRESSÃO:", justify="center", font=font13)
+add_config_footer_value = Text(add_config_frame, height=12, width=44, borderwidth=2)
+add_config_button = Button(
+    add_config_frame,
+    text="Atualizar",
+    command=lambda element="ADD config": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
     cursor="hand2"
 )
 # -----------------------------------------------------------------------------------------------------------
 # CONFIG TAB LAYOUT
 # -----------------------------------------------------------------------------------------------------------
-add_model_frame.place(x=10, y=20, height=150, width=350)
-add_model_title.place(relx=0.5, y=5, anchor=CENTER)
-add_model_name.place(x=5, y=25, anchor=NW)
-add_model_entry.place(x=80, y=24, anchor=NW)
-add_model_category.place(x=5, y=65, anchor=NW)
-add_model_category_comb.place(x=140, y=65, anchor=NW)
-add_model_button.place(relx=0.5, y=120, anchor=CENTER)
+add_model_frame.place(x=20, y=20, height=200, width=400)
+add_model_title.place(relx=0.5, y=15, anchor=CENTER)
+add_model_name.place(x=30, y=35, anchor=NW)
+add_model_entry.place(x=370, y=34, anchor=NE)
+add_model_category.place(x=30, y=90, anchor=NW)
+add_model_category_comb.place(x=370, y=89, anchor=NE)
+add_model_button.place(x=370, y=150, anchor=NE)
+rmv_model_button.place(x=30, y=150, anchor=NW)
 
-add_category_frame.place(x=10, y=200, height=150, width=350)
-add_category_title.place(relx=0.5, y=5, anchor=CENTER)
-add_category_name.place(x=5, y=25, anchor=NW)
-add_category_name_entry.place(x=80, y=24, anchor=NW)
-add_category_price.place(x=5, y=65, anchor=NW)
-add_category_price_entry.place(x=190, y=64, anchor=NW)
-add_category_button.place(relx=0.5, y=120, anchor=CENTER)
+add_category_frame.place(x=20, y=250, height=250, width=400)
+add_category_title.place(relx=0.5, y=15, anchor=CENTER)
+add_category_name.place(x=30, y=45, anchor=NW)
+add_category_name_entry.place(x=370, y=44, anchor=NE)
+add_category_price.place(x=30, y=90, anchor=NW)
+add_category_price_entry.place(x=370, y=89, anchor=NE)
+add_category_daily_price.place(x=30, y=130, anchor=NW)
+add_category_daily_price_entry.place(x=370, y=129, anchor=NE)
+add_category_button.place(x=370, y=180, anchor=NE)
+rmv_category_button.place(x=30, y=180, anchor=NW)
 
-add_color_frame.place(x=10, y=380, height=100, width=350)
-add_color_title.place(relx=0.5, y=5, anchor=CENTER)
-add_color_name.place(x=5, y=25, anchor=NW)
-add_color_name_entry.place(x=80, y=24, anchor=NW)
-add_color_button.place(relx=0.5, y=70, anchor=CENTER)
+add_color_frame.place(x=20, y=530, height=180, width=400)
+add_color_title.place(relx=0.5, y=15, anchor=CENTER)
+add_color_name.place(x=30, y=45, anchor=NW)
+add_color_name_entry.place(x=370, y=44, anchor=NE)
+add_color_button.place(x=370, y=100, anchor=NE)
+rmv_color_button.place(x=30, y=100, anchor=NW)
 
-add_status_frame.place(x=10, y=510, height=100, width=350)
-add_status_title.place(relx=0.5, y=5, anchor=CENTER)
-add_status_name.place(x=5, y=25, anchor=NW)
-add_status_name_entry.place(x=80, y=24, anchor=NW)
-add_status_button.place(relx=0.5, y=70, anchor=CENTER)
+add_user_frame.place(x=450, y=20, height=250, width=400)
+add_user_title.place(relx=0.5, y=15, anchor=CENTER)
+add_user_name.place(x=30, y=45, anchor=NW)
+add_user_name_entry.place(x=370, y=44, anchor=NE)
+add_user_pass.place(x=30, y=90, anchor=NW)
+add_user_pass_entry.place(x=370, y=89, anchor=NE)
+add_user_role.place(x=30, y=135, anchor=NW)
+add_user_role_comb.place(x=370, y=134, anchor=NE)
+rmv_user_button.place(x=30, y=180, anchor=NW)
+add_user_button.place(x=370, y=180, anchor=NE)
 
-add_user_frame.place(x=380, y=20, height=200, width=350)
-add_user_title.place(relx=0.5, y=5, anchor=CENTER)
-add_user_name.place(x=5, y=25, anchor=NW)
-add_user_name_entry.place(x=80, y=24, anchor=NW)
-add_user_pass.place(x=5, y=65, anchor=NW)
-add_user_pass_entry.place(x=80, y=64, anchor=NW)
-add_user_role.place(x=5, y=105, anchor=NW)
-add_user_role_comb.place(x=130, y=104, anchor=NW)
-add_user_button.place(relx=0.5, y=160, anchor=CENTER)
+add_status_frame.place(x=450, y=300, height=180, width=400)
+add_status_title.place(relx=0.5, y=15, anchor=CENTER)
+add_status_name.place(x=30, y=45, anchor=NW)
+add_status_name_entry.place(x=370, y=44, anchor=NE)
+add_status_button.place(x=370, y=100, anchor=NE)
+rmv_status_button.place(x=30, y=100, anchor=NW)
+
+add_config_frame.place(x=880, y=20, height=650, width=420)
+add_config_title.place(relx=0.5, y=15, anchor=CENTER)
+add_config_tolerance.place(x=30, y=45, anchor=NW)
+add_config_tolerance_entry.place(x=390, y=44, anchor=NE)
+add_config_header.place(relx=0.5, y=100, anchor=CENTER)
+add_config_header_value.insert(1.0, chars=get_config()["printer_header"])
+add_config_header_value.place(x=30, y=120, anchor=NW)
+add_config_footer.place(relx=0.5, y=350, anchor=CENTER)
+add_config_footer_value.insert(1.0, chars=get_config()["printer_footer"])
+add_config_footer_value.place(x=30, y=370, anchor=NW)
+add_config_button.place(relx=0.5, y=615, anchor=CENTER)
 
 if __name__ == "__main__":
     open_printer_connection()

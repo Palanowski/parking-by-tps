@@ -11,16 +11,25 @@ def get_all_categories():
     return categories
 
 
-def post_category(categoryModel: CategoryModel):
+def update_or_insert_category(categoryModel: CategoryModel):
     with get_dal_mysql() as db:
-        category = db(db.category.name==category.name).select().first()
+        category = db(db.category.id==category.id).select().first()
         if category:
-            raise Exception(detail="Esta categoria já existe")
-        new = db.category.insert(**categoryModel.model_dump())
-    return new
+            category.update(**categoryModel.model_dump(exclude_unset=True))
+        else:
+            db.category.insert(**categoryModel.model_dump(exclude_unset=True))
+    return True
 
 
 def check_category(categoryID):
     with get_dal_mysql() as db:
-        category = db(db.category.id == categoryID).select(db.category.name).first()
+        category = db(db.category.id == categoryID).select().first()
     return True if category else False
+
+
+def delete_category(categoryID):
+    with get_dal_mysql() as db:
+        category = db(db.category.id == categoryID).select().first()
+        if category:
+            db(db.category.id == categoryID).delete()
+    return True

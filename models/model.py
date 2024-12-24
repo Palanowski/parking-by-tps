@@ -11,16 +11,25 @@ def get_all_models():
     return models
 
 
-def post_model(modelModel: ModelModel):
+def update_or_insert_model(modelModel: ModelModel):
     with get_dal_mysql() as db:
         model = db(db.model.id==modelModel.id).select().first()
         if model:
-            raise Exception(detail="Este modelo já existe")
-        new = db.model.insert(**modelModel.model_dump())
-    return new
+            model.update(**modelModel.model_dump())
+        else:
+            new_model = db.model.insert(**modelModel.model_dump())
+    return True
 
 
 def check_model(modelID):
     with get_dal_mysql() as db:
         model = db(db.model.id == modelID).select().first()
     return model if model else False
+
+
+def delete_model(modelID):
+    with get_dal_mysql() as db:
+        model = db(db.model.id == modelID).select().first()
+        if model:
+            db(db.model.id == modelID).delete()
+    return True

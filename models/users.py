@@ -1,5 +1,6 @@
 from datetime import datetime
 from db.dal_connect import get_dal_mysql
+from schemas.users import UsersModel
 
 
 def get_all_users():
@@ -14,6 +15,23 @@ def get_user_by_id(userID):
         user = db(db.users.name == userID).select().first()
     return user.as_dict() if user else False
 
+
+def update_or_insert_user(userModel: UsersModel):
+    with get_dal_mysql() as db:
+        user = db(db.users.id==userModel.id).select().first()
+        if user:
+            new_user = user.update(**userModel.model_dump(exclude_unset=True))
+        else:
+            new_user = db.users.insert(**userModel.model_dump(exclude_unset=True))
+    return new_user
+
+
+def delete_user(userID):
+    with get_dal_mysql() as db:
+        user = db(db.users.id==userID).select().first()
+        if user:
+            db(db.users.id==userID).delete()
+    return True
 
 def log_in(userID):
     with get_dal_mysql() as db:
