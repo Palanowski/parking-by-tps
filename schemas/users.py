@@ -8,3 +8,4 @@ class UsersModel(BaseModel):
     name: str = Field(..., description="Nome do usuário")
     password: Optional[str] = Field(default=None, description="Senha do usuário")
     role: str = Field(default=None, description="Papel do usuário")
+    ISactive: bool = Field(default=True, description="Status do usuário - Ativo/Inativo")

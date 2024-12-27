@@ -11,11 +11,17 @@ def get_all_categories():
     return categories
 
 
+def get_category_by_id(categoryID):
+    with get_dal_mysql() as db:
+        category = db(db.category.id==categoryID).select().first()
+    return category.as_dict() if category else False
+
+
 def update_or_insert_category(categoryModel: CategoryModel):
     with get_dal_mysql() as db:
-        category = db(db.category.id==category.id).select().first()
+        category = db(db.category.id==categoryModel.id).select().first()
         if category:
-            category.update(**categoryModel.model_dump(exclude_unset=True))
+            db(db.category.id==categoryModel.id).update(**categoryModel.model_dump(exclude_unset=True))
         else:
             db.category.insert(**categoryModel.model_dump(exclude_unset=True))
     return True

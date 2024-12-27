@@ -11,13 +11,19 @@ def get_all_models():
     return models
 
 
+def get_model_by_id(modelID):
+    with get_dal_mysql() as db:
+        model = db(db.model.id==modelID).select().first()
+    return model.as_dict() if model else False
+
+
 def update_or_insert_model(modelModel: ModelModel):
     with get_dal_mysql() as db:
         model = db(db.model.id==modelModel.id).select().first()
         if model:
-            model.update(**modelModel.model_dump())
+            db(db.model.id==modelModel.id).update(**modelModel.model_dump())
         else:
-            new_model = db.model.insert(**modelModel.model_dump())
+            db.model.insert(**modelModel.model_dump())
     return True
 
 

@@ -7,11 +7,15 @@ from tkinter.constants import *
 from tkinter import messagebox as mb
 from ttkwidgets.autocomplete import AutocompleteCombobox
 
+from barcode import EAN8
+from barcode.writer import ImageWriter
+
 from models.color import *
 from models.category import *
 from models.config import *
 from models.model import *
 from models.parking import *
+from models.reports import calc_metrics
 from models.status import *
 from models.users import *
 from models.impressora import *
@@ -34,7 +38,6 @@ style.configure('Treeview.Heading', font=(None, 12, "bold"), height=50)
 login = StringVar(value="Usuário")
 password = StringVar(value="Senha")
 
-active_user_id = StringVar()
 active_user_name = StringVar(value="-efetuar login-")
 active_user_role = StringVar()
 
@@ -86,6 +89,27 @@ change_value = StringVar(value="0.00")
 addition = StringVar(value="0.00")
 discount = StringVar(value="0.00")
 out_quit_return_button = StringVar(value="Desistência")
+
+report_resp_var = StringVar()
+report_total_vehicles = IntVar()
+report_total_cash = DoubleVar()
+report_total_add = DoubleVar()
+report_total_discount = DoubleVar()
+report_total_open_vehicles = IntVar()
+report_total_open_vehicles_1 = IntVar()
+report_total_open_vehicles_2 = IntVar()
+report_total_open_vehicles_3 = IntVar()
+report_total_open_vehicles_4 = IntVar()
+report_total_finalized_vehicles = IntVar()
+report_total_finalized_vehicles_1 = IntVar()
+report_total_finalized_vehicles_2 = IntVar()
+report_total_finalized_vehicles_3 = IntVar()
+report_total_finalized_vehicles_4 = IntVar()
+report_total_canceled_vehicles = IntVar()
+report_total_canceled_vehicles_1 = IntVar()
+report_total_canceled_vehicles_2 = IntVar()
+report_total_canceled_vehicles_3 = IntVar()
+report_total_canceled_vehicles_4 = IntVar()
 
 order = True
 header_in = [
@@ -146,8 +170,23 @@ phrase = [
 def update_completion_list(element):
     if "model" in element:
         models = get_all_models()
-        in_model_entry._completion_list=models
-        add_model_entry._completion_list=models
+        in_model_entry.configure(values=models)
+        add_model_entry.configure(values=models)
+    elif "category" in element:
+        categories = get_all_categories()
+        in_category_entry.configure(values=categories)
+        add_category_name_entry.configure(values=categories)
+    elif "color" in element:
+        colors = get_all_colors()
+        in_color_entry.configure(values=colors)
+        add_color_name_entry.configure(values=colors)
+    elif "status" in element:
+        status = get_all_status()
+        add_status_name_entry.configure(values=status)
+    elif "user" in element:
+        users = get_all_users()
+        login_entry.configure(values=users)
+        add_user_name_entry.configure(values=users)
 
 def calc_total_count():
     prefix = random.randint(1000, 9999)
@@ -164,14 +203,15 @@ def login_verification(event):
     user = get_user_by_id(login.get())
     if user:
         if user["password"] == password.get():
-            active_user_id.set(user["id"])
             active_user_name.set(user["name"])
             active_user_role.set(user["role"])
             root_notebook.tab(parking_tab, state="normal")
             if user["role"] == "admin":
                 root_notebook.tab(config_tab, state="normal")
+                root_notebook.tab(report_tab, state="normal")
             else:
                 root_notebook.tab(config_tab, state="hidden")
+                root_notebook.tab(report_tab, state="hidden")
             log_in(user["name"])
             calc_total_count()
             root_notebook.select(parking_tab)
@@ -198,19 +238,19 @@ def logout():
         log_out(user_name)
 
 
-def notebook_tab_selection(event):
-    selected_tab = event.widget.select()
-    tab_name = event.widget.tab(selected_tab, "text")
-    if ("acesso" in tab_name) and active_user_id.get():
-        logout()
-    if "Config" in tab_name:
-        pass
+# def notebook_tab_selection(event):
+#     selected_tab = event.widget.select()
+#     tab_name = event.widget.tab(selected_tab, "text")
+#     if ("acesso" in tab_name) and active_user_name.get():
+#         logout()
+#     if "Config" in tab_name:
+#         pass
 
 
 def open_printer_connection():
     AbreConexaoImpressora(
         1,
-        "I9",
+        "I8",
         "USB",
         0
     )
@@ -233,17 +273,19 @@ def print_parking(code):
     ImpressaoTexto(f"{in_model.get()}  {in_color.get()}", 1, 8, 17)
     AvancaPapel(3)
     ImpressaoTexto(f"{datetime.now():%Y-%m-%d %H:%M}", 1, 8, 17)
+    AvancaPapel(1)
+    ImpressaoTexto("================================================", 1, 0, 0)
     AvancaPapel(3)
     
-    ImpressaoCodigoBarras(3, str(code), 80, 3, 4)
+    ImpressaoCodigoBarras(4, f"*{code}*", 80, 3, 4)
     AvancaPapel(3)
-    ImpressaoTexto("==================================================", 1, 8, 0)
+    ImpressaoTexto("================================================", 1, 8, 0)
     AvancaPapel(1)
     ImpressaoTexto("SEM TOLERÂNCIA NA PRIMEIRA HORA", 1, 8, 0)
     AvancaPapel(1)
     ImpressaoTexto("Horário de funcionamento:", 1, 0, 0)
     ImpressaoTexto(config["printer_footer"], 1, 1, 0)
-    AvancaPapel(1)
+    AvancaPapel(3)
     Corte(3)
     # ------------- Impressão chave
     AvancaPapel(3)
@@ -258,8 +300,8 @@ def print_parking(code):
 
 
 def hash_generator():
-    code = "42"
-    for index in range(6):
+    code = ""
+    for index in range(10):
         code = f"{code}{str(random.randint(0, 9))}"
     return code
 
@@ -310,7 +352,7 @@ def ending_parking(status):
         if confirmation:
             if "Desist" in out_quit_return_button.get():
                 plateID = out_plate.get()
-                cancel_parking(plateID)
+                cancel_parking(plateID=plateID, userID=active_user_name.get())
             elif out_quit_return_button.get() == "Retorno":
                 plateID = out_plate.get()
                 return_parking(plateID)
@@ -340,7 +382,7 @@ def sort_in_table(col):
         order_in = False
     else:
         order_in = True
-    df_in = df_in.sort_values(by=[header_map[col]], ascending=order)
+    df_in = df_in.sort_values(by=[header_map[col]], ascending=order_in)
     mount_in_table()
 
 
@@ -357,7 +399,7 @@ def sort_out_table(col):
         order_out = False
     else:
         order_out = True
-    df_out = df_out.sort_values(by=[header_map[col]], ascending=order)
+    df_out = df_out.sort_values(by=[header_map[col]], ascending=order_out)
     mount_out_table()
 
 
@@ -392,7 +434,7 @@ def mount_out_table():
         out_table.heading(col, text=col, command=lambda col=col : sort_out_table(col))
     for row in rows:
         values = [value for value in row]
-        out_table.insert("", 0, values=values, tags="red")
+        out_table.insert("", 0, values=values, tags="gray")
 
 
 def update_in_grid():
@@ -466,6 +508,22 @@ def check_element(event, element):
             mb.showwarning("ALERTA", "Código não encontrado")
 
 
+def check_config_element(event, element):
+    if element == "category":
+        category = get_category_by_id(new_category_name.get())
+        if category:
+            new_category_price.set(category["price"])
+            new_category_daily_price.set(category["daily_price"])
+    elif element == "model":
+        model = get_model_by_id(new_model_name.get())
+        if model:
+            new_model_category.set(model["category"])
+    elif element == "user":
+        user = get_user_by_id(new_user_name.get())
+        if user:
+            new_user_role.set(user["role"])
+
+
 def enter_ent_button_focus(event):
     in_confirm_button.focus()
 
@@ -504,9 +562,8 @@ def apply_add_and_discount(event, action: str):
 
 
 def calc_total_value(delta_hours: int, delta_minutes: int):
-    with get_dal_mysql() as db:
-        config_info = db().select(db.config.ALL).first()
-        category_info = db(db.category.id==out_category.get()).select().first()
+    config_info = get_config()
+    category_info = get_category_by_id(out_category.get())
     if delta_minutes > config_info["tolerance"]:
         delta_hours += 1
     if delta_hours<=1:
@@ -521,11 +578,7 @@ def calc_total_value(delta_hours: int, delta_minutes: int):
         value_color = "deep pink"
     factor = delta_hours if delta_hours!=0 else 1
     total = format(float(category_info["price"]*factor), '.2f')
-    if "MOTO" in category_info["id"]:
-        deily_price = "daily_price_moto"
-    else:
-        deily_price = "daily_price_vehicle"
-    if float(category_info["price"]*delta_hours) >= config_info[deily_price]:
+    if float(category_info["price"]*delta_hours) >= category_info["daily_price"]:
         value_color = "saddle brown"
         total = format(float(category_info["daily_price"]), '.2f')
     value_received.set(total)
@@ -541,6 +594,9 @@ def calc_total_value(delta_hours: int, delta_minutes: int):
 
 def open_exit_tab(event):
     parking = get_parking_by_plate(out_plate.get())
+    out_model.set(parking["model"])
+    out_category.set(parking["category"])
+    out_color.set(parking["color"])
     if (parking["status"] == "EM ABERTO") or (parking["status"] == "RETORNO"):
         root_notebook.tab(exit_tab, state="normal")
         root_notebook.select(exit_tab)
@@ -576,12 +632,12 @@ def close_exit_tab():
 def add_element(element: str):
     if "ADD" in element:
         if "model" in element:
-            model = ModelModel(id=new_model_name.get(), category=add_model_category_comb.get())
+            model = ModelModel(id=new_model_name.get(), category=add_model_category_entry.get())
             update_or_insert_model(model)
             update_completion_list("model")
             mb.showwarning("SUCESSO", f"Modelo {model.id} adicionado/atualizado com sucesso.")
         elif "category" in element:
-            category = CategoryModel(id=new_category_name.get(), price=new_category_price.get())
+            category = CategoryModel(id=new_category_name.get(), price=new_category_price.get(), daily_price=new_category_daily_price.get())
             update_or_insert_category(category)
             update_completion_list("category")
             mb.showwarning("SUCESSO", f"Categoria {category.id} adicionada/atualizada com sucesso.")
@@ -589,15 +645,15 @@ def add_element(element: str):
             update_or_insert_color(new_color_name.get())
             update_completion_list("color")
             mb.showwarning("SUCESSO", f"Cor {new_color_name.get()} adicionada com sucesso.")
-        elif "users" in element:
-            user = UsersModel(name=new_user_name.get(), password=new_user_password.get(), role=new_user_role.get())
+        elif "user" in element:
+            user = UsersModel(name=new_user_name.get(), password=new_user_password.get(), role=new_user_role.get(), ISactive=True)
             update_or_insert_user(user)
             update_completion_list("users")
-            mb.showwarning("SUCESSO", f"Usuário {user.name} adicionado/atualizado com sucesso.")
+            mb.showwarning("SUCESSO", f"Usuário {new_user_name.get()} adicionado/atualizado com sucesso.")
         elif "status" in element:
             update_or_insert_status(new_status.get())
             update_completion_list("status")
-            mb.showwarning("SUCESSO", f"Status {new_color_name.get()} adicionado com sucesso.")
+            mb.showwarning("SUCESSO", f"Status {new_status.get()} adicionado com sucesso.")
         elif "config" in element:
             update_config(tolerance=new_tolerance.get(), header=new_header.get(), footer=new_footer.get())
             update_completion_list("config")
@@ -614,19 +670,50 @@ def add_element(element: str):
         elif "color" in element:
             delete_color(new_color_name.get())
             update_completion_list("color")
-            mb.showwarning("SUCESSO", f"Cor {new_category_name.get()} removida com sucesso.")
-        elif "users" in element:
+            mb.showwarning("SUCESSO", f"Cor {new_color_name.get()} removida com sucesso.")
+        elif "user" in element:
             delete_user(new_user_name.get())
             update_completion_list("users")
+            mb.showwarning("SUCESSO", f"Usuário {new_user_name.get()} desativado com sucesso.")
         elif "status" in element:
             delete_status(new_status.get())
             update_completion_list("status")
+            mb.showwarning("SUCESSO", f"Status {new_status.get()} removido com sucesso.")
+
+
+def calc_report_metrics(event, userID: str):
+    if userID == "GERAL":
+        parkings = get_parkings_by_user_order_by_status()
+    else:
+        parkings_closed = get_parkings_by_user_order_by_status(userID=userID)
+        parkings = get_parkings_by_user_order_by_status(userID=userID, statusID="EM ABERTO") + parkings_closed
+    metrics = calc_metrics(parkings=parkings)
+    report_total_vehicles.set(metrics["total_count"])
+    report_total_cash.set(metrics["total_cash"])
+    report_total_add.set(metrics["total_add"])
+    report_total_discount.set(metrics["total_discount"])
+    report_total_open_vehicles.set(metrics["total_open_vehicles"])
+    report_total_open_vehicles_1.set(metrics["total_open_cat_1"])
+    report_total_open_vehicles_2.set(metrics["total_open_cat_2"])
+    report_total_open_vehicles_3.set(metrics["total_open_cat_3"])
+    report_total_open_vehicles_4.set(metrics["total_open_cat_4"])
+    report_total_finalized_vehicles.set(metrics["total_finalized_vehicles"])
+    report_total_finalized_vehicles_1.set(metrics["total_finalized_cat_1"])
+    report_total_finalized_vehicles_2.set(metrics["total_finalized_cat_2"])
+    report_total_finalized_vehicles_3.set(metrics["total_finalized_cat_3"])
+    report_total_finalized_vehicles_4.set(metrics["total_finalized_cat_4"])
+    report_total_canceled_vehicles.set(metrics["total_canceled_vehicles"])
+    report_total_canceled_vehicles_1.set(metrics["total_canceled_cat_1"])
+    report_total_canceled_vehicles_2.set(metrics["total_canceled_cat_2"])
+    report_total_canceled_vehicles_3.set(metrics["total_canceled_cat_3"])
+    report_total_canceled_vehicles_4.set(metrics["total_canceled_cat_4"])
+
 # -----------------------------------------------------------------------------------------------------------
 # NOTEBOOK CONFIG
 # -----------------------------------------------------------------------------------------------------------
 root_notebook = ttk.Notebook(root)
 root_notebook.pack(expand=1,fill=BOTH)
-root_notebook.bind("<<NotebookTabChanged>>", notebook_tab_selection)
+# root_notebook.bind("<<NotebookTabChanged>>", notebook_tab_selection)
 
 login_tab = ttk.Frame(root_notebook)
 root_notebook.add(login_tab, text="Controle de acesso")
@@ -653,12 +740,6 @@ count_total_label.pack(side=LEFT)
 # LOGIN TAB WIDJETS
 # -----------------------------------------------------------------------------------------------------------
 login_entry = AutocompleteCombobox(login_tab, font=font20,textvariable=login, completevalues=get_all_users())
-# login_entry = AutocompleteEntry(
-#     login_tab,
-#     font=font20,
-#     textvariable=login,
-#     completevalues=get_all_users()
-# )
 password_entry = ttk.Entry(
     login_tab,
     font=font20,
@@ -993,14 +1074,14 @@ discount_entry_exit_tab.bind("<Button-1>", on_click)
 # -----------------------------------------------------------------------------------------------------------
 # EXIT TAB LAYOUT
 # -----------------------------------------------------------------------------------------------------------
-out_plate_label_exit_tab.place(relx=0.21, y=100, anchor=SE)
-out_plate_value_label_exit_tab.place(relx=0.215, y=104, anchor=SW)
-out_model_label_exit_tab.place(relx=0.21, y=220, anchor=SE)
-out_model_value_label_exit_tab.place(relx=0.215, y=220, anchor=SW)
-out_color_label_exit_tab.place(relx=0.21, y=340, anchor=SE)
-out_color_value_label_exit_tab.place(relx=0.215, y=340, anchor=SW)
-out_category_label_exit_tab.place(relx=0.6, y=100, anchor=SE)
-out_category_value_label_exit_tab.place(relx=0.61, y=104, anchor=SW)
+out_plate_label_exit_tab.place(relx=0.25, y=100, anchor=SE)
+out_plate_value_label_exit_tab.place(relx=0.255, y=104, anchor=SW)
+out_model_label_exit_tab.place(relx=0.25, y=220, anchor=SE)
+out_model_value_label_exit_tab.place(relx=0.255, y=224, anchor=SW)
+out_color_label_exit_tab.place(relx=0.6, y=100, anchor=SE)
+out_color_value_label_exit_tab.place(relx=0.61, y=104, anchor=SW)
+out_category_label_exit_tab.place(relx=0.25, y=340, anchor=SE)
+out_category_value_label_exit_tab.place(relx=0.255, y=344, anchor=SW)
 in_time_label_exit_tab.place(relx=0.15, y=415, anchor=SE)
 in_time_value_label_exit_tab.place(relx=0.155, y=415, anchor=SW)
 out_time_label_exit_tab.place(relx=0.35, y=415, anchor=SE)
@@ -1028,7 +1109,7 @@ add_model_title = ttk.Label(add_model_frame, text="MODELOS", justify="center", f
 add_model_name = ttk.Label(add_model_frame, text="NOME:", justify="center", font=font14)
 add_model_entry = AutocompleteCombobox(add_model_frame, width=23, font=font14, textvariable=new_model_name, completevalues=get_all_models())
 add_model_category = ttk.Label(add_model_frame, text="CATEGORIA:", justify="center", font=font14)
-add_model_category_comb = AutocompleteCombobox(add_model_frame, width=20, font=font14, completevalues=get_all_categories())
+add_model_category_entry = AutocompleteCombobox(add_model_frame, width=20, font=font14, completevalues=get_all_categories())
 add_model_button = Button(
     add_model_frame,
     text="Adicionar",
@@ -1113,6 +1194,38 @@ rmv_color_button = Button(
     width=12,
     cursor="hand2"
 )
+add_user_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_user_title = ttk.Label(add_user_frame, text="USUÁRIOS", justify="center", font=font14)
+add_user_name = ttk.Label(add_user_frame, text="NOME:", justify="center", font=font14)
+add_user_name_entry = AutocompleteCombobox(add_user_frame, width=23, font=font14, textvariable=new_user_name, completevalues=get_all_users())
+add_user_pass = ttk.Label(add_user_frame, text="SENHA:", justify="center", font=font14)
+add_user_pass_entry = ttk.Entry(add_user_frame, width=23, font=font14, textvariable=new_user_password, show="*")
+add_user_role = ttk.Label(add_user_frame, text="PERMISSÃO:", justify="center", font=font14)
+add_user_role_entry = AutocompleteCombobox(add_user_frame, width=20, font=font14, textvariable=new_user_role, completevalues=["ADMIM", "CAIXA"])
+add_user_button = Button(
+    add_user_frame,
+    text="Adicionar",
+    command=lambda element="ADD user": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+rmv_user_button = Button(
+    add_user_frame,
+    text="Remover",
+    command=lambda element="RMV user": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
 add_status_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
 add_status_title = ttk.Label(add_status_frame, text="STATUS DO VEÍCULO", justify="center", font=font14)
 add_status_name = ttk.Label(add_status_frame, text="NOME:", justify="center", font=font14)
@@ -1141,30 +1254,12 @@ rmv_status_button = Button(
     width=12,
     cursor="hand2"
 )
-add_user_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
-add_user_title = ttk.Label(add_user_frame, text="USUÁRIOS", justify="center", font=font14)
-add_user_name = ttk.Label(add_user_frame, text="NOME:", justify="center", font=font14)
-add_user_name_entry = AutocompleteCombobox(add_user_frame, width=23, font=font14, textvariable=new_user_name, completevalues=get_all_users())
-add_user_pass = ttk.Label(add_user_frame, text="SENHA:", justify="center", font=font14)
-add_user_pass_entry = ttk.Entry(add_user_frame, width=23, font=font14, textvariable=new_user_password)
-add_user_role = ttk.Label(add_user_frame, text="PERMISSÃO:", justify="center", font=font14)
-add_user_role_comb = AutocompleteCombobox(add_user_frame, width=20, font=font14, completevalues=["ADMIM", "CAIXA"])
-add_user_button = Button(
-    add_user_frame,
-    text="Adicionar",
-    command=lambda element="ADD user": add_element(element=element),
-    font=font14,
-    bg="royalblue",
-    fg="white",
-    activebackground="coral1",
-    activeforeground="black",
-    width=12,
-    cursor="hand2"
-)
-rmv_user_button = Button(
-    add_user_frame,
+add_clear_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+add_clear_title = ttk.Label(add_clear_frame, text="LIMPEZA DE DADOS", justify="center", font=font14)
+add_clear_button = Button(
+    add_clear_frame,
     text="Remover",
-    command=lambda element="RMV user": add_element(element=element),
+    command=clear_data_records,
     font=font14,
     bg="royalblue",
     fg="white",
@@ -1201,7 +1296,7 @@ add_model_title.place(relx=0.5, y=15, anchor=CENTER)
 add_model_name.place(x=30, y=35, anchor=NW)
 add_model_entry.place(x=370, y=34, anchor=NE)
 add_model_category.place(x=30, y=90, anchor=NW)
-add_model_category_comb.place(x=370, y=89, anchor=NE)
+add_model_category_entry.place(x=370, y=89, anchor=NE)
 add_model_button.place(x=370, y=150, anchor=NE)
 rmv_model_button.place(x=30, y=150, anchor=NW)
 
@@ -1230,28 +1325,150 @@ add_user_name_entry.place(x=370, y=44, anchor=NE)
 add_user_pass.place(x=30, y=90, anchor=NW)
 add_user_pass_entry.place(x=370, y=89, anchor=NE)
 add_user_role.place(x=30, y=135, anchor=NW)
-add_user_role_comb.place(x=370, y=134, anchor=NE)
+add_user_role_entry.place(x=370, y=134, anchor=NE)
 rmv_user_button.place(x=30, y=180, anchor=NW)
 add_user_button.place(x=370, y=180, anchor=NE)
 
-add_status_frame.place(x=450, y=300, height=180, width=400)
+add_status_frame.place(x=450, y=320, height=180, width=400)
 add_status_title.place(relx=0.5, y=15, anchor=CENTER)
 add_status_name.place(x=30, y=45, anchor=NW)
 add_status_name_entry.place(x=370, y=44, anchor=NE)
 add_status_button.place(x=370, y=100, anchor=NE)
 rmv_status_button.place(x=30, y=100, anchor=NW)
 
-add_config_frame.place(x=880, y=20, height=650, width=420)
+add_clear_frame.place(x=450, y=530, height=100, width=400)
+add_clear_title.place(relx=0.5, y=15, anchor=CENTER)
+add_clear_button.place(relx=0.5, y=60, anchor=CENTER)
+
+add_config_frame.place(x=880, y=20, height=690, width=420)
 add_config_title.place(relx=0.5, y=15, anchor=CENTER)
 add_config_tolerance.place(x=30, y=45, anchor=NW)
+config_from_db = get_config()
+new_tolerance.set(config_from_db["tolerance"])
 add_config_tolerance_entry.place(x=390, y=44, anchor=NE)
-add_config_header.place(relx=0.5, y=100, anchor=CENTER)
-add_config_header_value.insert(1.0, chars=get_config()["printer_header"])
-add_config_header_value.place(x=30, y=120, anchor=NW)
-add_config_footer.place(relx=0.5, y=350, anchor=CENTER)
-add_config_footer_value.insert(1.0, chars=get_config()["printer_footer"])
-add_config_footer_value.place(x=30, y=370, anchor=NW)
-add_config_button.place(relx=0.5, y=615, anchor=CENTER)
+add_config_header.place(relx=0.5, y=120, anchor=CENTER)
+add_config_header_value.insert(1.0, chars=config_from_db["printer_header"])
+add_config_header_value.place(x=30, y=140, anchor=NW)
+add_config_footer.place(relx=0.5, y=370, anchor=CENTER)
+add_config_footer_value.insert(1.0, chars=config_from_db["printer_footer"])
+add_config_footer_value.place(x=30, y=390, anchor=NW)
+add_config_button.place(relx=0.5, y=635, anchor=CENTER)
+
+# -----------------------------------------------------------------------------------------------------------
+# CONFIG TAB COMMANDS
+# -----------------------------------------------------------------------------------------------------------
+add_model_entry.bind("<<ComboboxSelected>>", lambda event: check_config_element(event, "model"))
+add_model_entry.bind("<Return>", lambda event: check_config_element(event, "model"))
+add_model_entry.bind("<Tab>", lambda event: check_config_element(event, "model"))
+add_model_entry.bind("<KP_Enter>", lambda event: check_config_element(event, "model"))
+
+add_category_name_entry.bind("<<ComboboxSelected>>", lambda event: check_config_element(event, "category"))
+add_category_name_entry.bind("<Return>", lambda event: check_config_element(event, "category"))
+add_category_name_entry.bind("<Tab>", lambda event: check_config_element(event, "category"))
+add_category_name_entry.bind("<KP_Enter>", lambda event: check_config_element(event, "category"))
+
+add_user_name_entry.bind("<<ComboboxSelected>>", lambda event: check_config_element(event, "user"))
+add_user_name_entry.bind("<Return>", lambda event: check_config_element(event, "user"))
+add_user_name_entry.bind("<Tab>", lambda event: check_config_element(event, "user"))
+add_user_name_entry.bind("<KP_Enter>", lambda event: check_config_element(event, "user"))
+
+# -----------------------------------------------------------------------------------------------------------
+# REPORT TAB WIDGETS
+# -----------------------------------------------------------------------------------------------------------
+report_tab_frame = ttk.Frame(report_tab, borderwidth=2, relief="sunken")
+report_total_name = ttk.Label(report_tab_frame, text="Total de veículos:", font=font14)
+report_total_value = ttk.Label(report_tab_frame, textvariable=report_total_vehicles, font=font14, borderwidth=3, relief="ridge", width=15, anchor=CENTER)
+report_resp_name = ttk.Label(report_tab_frame, text="Responsável:", font=font14)
+report_resp_entry = AutocompleteCombobox(report_tab_frame, width=15, font=font14, textvariable=report_resp_var, completevalues=get_users_from_parking())
+report_open_veh_title = ttk.Label(report_tab_frame, text="Veículos em aberto:", font=font14)
+report_finalized_veh_title = ttk.Label(report_tab_frame, text="Veículos finalizados:", font=font14)
+report_canceled_veh_title = ttk.Label(report_tab_frame, text="Veículos desistêntes:", font=font14)
+report_veh_name_1 = ttk.Label(report_tab_frame, text="CARRO", font=font14)
+report_veh_name_2 = ttk.Label(report_tab_frame, text="SUV:", font=font14)
+report_veh_name_3 = ttk.Label(report_tab_frame, text="MOTOCICLETA:", font=font14)
+report_veh_name_4 = ttk.Label(report_tab_frame, text="CAMINHONETE:", font=font14)
+report_veh_total = ttk.Label(report_tab_frame, text="TOTAL:", font=font14)
+report_total_cash_name = ttk.Label(report_tab_frame, text="Valor em caixa:", font=font14)
+report_total_cash_value = ttk.Label(report_tab_frame, textvariable=report_total_cash, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_total_add_name = ttk.Label(report_tab_frame, text="Acréscimos:", font=font14)
+report_total_add_value = ttk.Label(report_tab_frame, textvariable=report_total_add, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_total_disc_name = ttk.Label(report_tab_frame, text="Descontos:", font=font14)
+report_total_disc_value = ttk.Label(report_tab_frame, textvariable=report_total_discount, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_open_value_1 = ttk.Label(report_tab_frame, textvariable=report_total_open_vehicles_1, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_open_value_2 = ttk.Label(report_tab_frame, textvariable=report_total_open_vehicles_2, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_open_value_3 = ttk.Label(report_tab_frame, textvariable=report_total_open_vehicles_3, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_open_value_4 = ttk.Label(report_tab_frame, textvariable=report_total_open_vehicles_4, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_separator = ttk.Separator(report_tab_frame)
+report_open_total_value = ttk.Label(report_tab_frame, textvariable=report_total_open_vehicles, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_finalized_value_1 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_1, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_finalized_value_2 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_2, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_finalized_value_3 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_3, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_finalized_value_4 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_4, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_finalized_total_value = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_canceled_value_1 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_1, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_canceled_value_2 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_2, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_canceled_value_3 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_3, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_canceled_value_4 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_4, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_canceled_total_value = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_print_button = Button(
+    report_tab_frame,
+    text="Imprimir",
+    command=add_element,
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+# -----------------------------------------------------------------------------------------------------------
+# REPORT TAB LAYOUT
+# -----------------------------------------------------------------------------------------------------------
+report_tab_frame.place(x=20, y=20, anchor=NW, height=690, width=1260)
+report_total_name.place(x=580, y=50, anchor=CENTER)
+report_total_value.place(x=580, y=80, anchor=CENTER)
+report_resp_name.place(x=880, y=50, anchor=CENTER)
+report_resp_entry.place(x=880, y=80, anchor=CENTER)
+report_open_veh_title.place(x=300, y=150, anchor=CENTER)
+report_finalized_veh_title.place(x=580, y=150, anchor=CENTER)
+report_canceled_veh_title.place(x=880, y=150, anchor=CENTER)
+report_veh_name_1.place(x=190, y=200, anchor=NE)
+report_veh_name_2.place(x=190, y=240, anchor=NE)
+report_veh_name_3.place(x=190, y=280, anchor=NE)
+report_veh_name_4.place(x=190, y=320, anchor=NE)
+report_separator.place(x=100, y=355, width=900)
+report_veh_total.place(x=190, y=370, anchor=NE)
+report_total_cash_name.place(x=300, y=420, anchor=CENTER)
+report_total_cash_value.place(x=300, y=460, anchor=CENTER)
+report_total_add_name.place(x=580, y=420, anchor=CENTER)
+report_total_add_value.place(x=580, y=460, anchor=CENTER)
+report_total_disc_name.place(x=880, y=420, anchor=CENTER)
+report_total_disc_value.place(x=880, y=460, anchor=CENTER)
+report_open_value_1.place(x=300, y=210, anchor=CENTER)
+report_open_value_2.place(x=300, y=250, anchor=CENTER)
+report_open_value_3.place(x=300, y=290, anchor=CENTER)
+report_open_value_4.place(x=300, y=330, anchor=CENTER)
+report_open_total_value.place(x=300, y=380, anchor=CENTER)
+report_finalized_value_1.place(x=580, y=210, anchor=CENTER)
+report_finalized_value_2.place(x=580, y=250, anchor=CENTER)
+report_finalized_value_3.place(x=580, y=290, anchor=CENTER)
+report_finalized_value_4.place(x=580, y=330, anchor=CENTER)
+report_finalized_total_value.place(x=580, y=380, anchor=CENTER)
+report_canceled_value_1.place(x=880, y=210, anchor=CENTER)
+report_canceled_value_2.place(x=880, y=250, anchor=CENTER)
+report_canceled_value_3.place(x=880, y=290, anchor=CENTER)
+report_canceled_value_4.place(x=880, y=330, anchor=CENTER)
+report_canceled_total_value.place(x=880, y=380, anchor=CENTER)
+report_print_button.place(x=880, y=520, anchor=CENTER)
+
+# -----------------------------------------------------------------------------------------------------------
+# REPORT TAB COMMANDS
+# -----------------------------------------------------------------------------------------------------------
+report_resp_entry.bind("<<ComboboxSelected>>", lambda event: calc_report_metrics(event, report_resp_var.get()))
+report_resp_entry.bind("<Return>", lambda event: calc_report_metrics(event, report_resp_var.get()))
+report_resp_entry.bind("<Tab>", lambda event: calc_report_metrics(event, report_resp_var.get()))
+report_resp_entry.bind("<KP_Enter>", lambda event: calc_report_metrics(event, report_resp_var.get()))
 
 if __name__ == "__main__":
     open_printer_connection()

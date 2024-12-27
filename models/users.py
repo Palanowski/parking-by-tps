@@ -5,7 +5,7 @@ from schemas.users import UsersModel
 
 def get_all_users():
     with get_dal_mysql() as db:
-        usersDB = db().select(db.users.name).as_list()
+        usersDB = db(db.users.ISactive==True).select(db.users.name).as_list()
         if usersDB:
             return [user["name"] for user in usersDB]
 
@@ -18,19 +18,19 @@ def get_user_by_id(userID):
 
 def update_or_insert_user(userModel: UsersModel):
     with get_dal_mysql() as db:
-        user = db(db.users.id==userModel.id).select().first()
+        user = db(db.users.name==userModel.name).select().first()
         if user:
-            new_user = user.update(**userModel.model_dump(exclude_unset=True))
+            db(db.users.name==userModel.name).update(**userModel.model_dump(exclude_unset=True))
         else:
-            new_user = db.users.insert(**userModel.model_dump(exclude_unset=True))
-    return new_user
+            db.users.insert(**userModel.model_dump(exclude_unset=True))
+    return True
 
 
 def delete_user(userID):
     with get_dal_mysql() as db:
-        user = db(db.users.id==userID).select().first()
+        user = db(db.users.name==userID).select().first()
         if user:
-            db(db.users.id==userID).delete()
+            db(db.users.name==userID).update(ISactive=False)
     return True
 
 def log_in(userID):

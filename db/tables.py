@@ -49,10 +49,12 @@ def define_tables(db):
 
     db.define_table(
         "users",
-        Field("id", "integer", notnull=True),
         Field("name", "string", length=45, notnull=True),
         Field("password", "string", length=45, notnull=True),
         Field("role", "string", length=45, notnull=True),
+        Field("ISactive", "boolean", default=True),
+        Field("created", "datetime", default=lambda: datetime.now()),
+        Field("updated", "datetime", default=lambda: datetime.now()),
         primarykey=["name"],
     )
 
@@ -77,6 +79,7 @@ def define_tables(db):
         Field("addition", "double"),
         Field("discount", "double"),
         Field("byPlate", "boolean", default=False),
+        Field("byCash", "boolean", default=False),
         primarykey=["id"],
     )
 

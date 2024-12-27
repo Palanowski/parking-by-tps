@@ -13,7 +13,7 @@ def update_or_insert_color(colorID):
     with get_dal_mysql() as db:
         color = db(db.color.id==colorID).select().first()
         if color:
-            color.update(id=colorID)
+            db(db.color.id==colorID).update(id=colorID)
         else:
             db.color.insert(id=colorID)
     return True

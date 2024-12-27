@@ -14,10 +14,10 @@ def update_or_insert_status(statusID: str):
     with get_dal_mysql() as db:
         status = db(db.parking_status.id==statusID).select().first()
         if status:
-            new_status = status.update(id=statusID)
+            db(db.parking_status.id==statusID).update(id=statusID)
         else:
-            new_status = db.parking_status.insert(id=statusID)
-    return new_status
+            db.parking_status.insert(id=statusID)
+    return True
 
 
 def get_status_by_id(statusID):
