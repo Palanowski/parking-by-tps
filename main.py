@@ -1,3 +1,4 @@
+import os
 import random
 import re
 from datetime import datetime, timedelta
@@ -6,9 +7,6 @@ from tkinter import *
 from tkinter.constants import *
 from tkinter import messagebox as mb
 from ttkwidgets.autocomplete import AutocompleteCombobox
-
-from barcode import EAN8
-from barcode.writer import ImageWriter
 
 from models.color import *
 from models.category import *
@@ -28,7 +26,7 @@ from schemas.users import UsersModel
 
 # CONFIG
 root = Tk()
-root.geometry("1300x760")
+root.geometry("1280x720")
 root.title("Estacionamento Costeira")
 style = ttk.Style()
 style.theme_use('clam')
@@ -68,6 +66,7 @@ config_daily_price_moto = StringVar()
 config_printer_header = StringVar()
 config_printer_footer = StringVar()
 
+search_in_plate = StringVar()
 in_plate = StringVar()
 in_model = StringVar()
 in_category = StringVar()
@@ -88,6 +87,7 @@ value_received = StringVar()
 change_value = StringVar(value="0.00")
 addition = StringVar(value="0.00")
 discount = StringVar(value="0.00")
+by_cash = BooleanVar()
 out_quit_return_button = StringVar(value="Desistência")
 
 report_resp_var = StringVar()
@@ -141,31 +141,6 @@ font18 = ('Arial', 18, 'bold')
 font20 = ('Arial', 20, 'bold')
 font45 = ('Arial', 45, 'bold')
 
-phrase = [
-    "A alegria do coração transparece no rosto, mas o coração angustiado oprime o espírito. - Provérbios 15:13",
-    "Regozija-te e alegra-te, porque o Senhor tem feito grandes coisas. - Joel 2:21",
-    "Este é o dia em que o Senhor agiu; alegremo-nos e exultemos neste dia. - Salmos 118:24",
-    "O amigo ama em todo o tempo; e na angústia nasce o irmão. - Provérbios 17:17",
-    "O Senhor é a minha força e o meu escudo; nele o meu coração confia. - Salmos 28:7",
-    "Porque vivemos por fé, e não pelo que vemos. - 2 Coríntios 5:7",
-    "Os olhos são a candeia do corpo. Se os seus olhos forem bons, todo o seu corpo será cheio de luz. - Mateus 6:22",
-    "Bem-aventurados os puros de coração, pois verão a Deus. - Mateus 5:8",
-    "O próprio Senhor irá à sua frente e estará com você; Ele nunca o deixará, nunca o abandonará. Não tenha medo! Não se desanime! - Deuteronômio 31:8",
-    "Algumas amizades não duram nada, mas um verdadeiro amigo é mais chegado que um irmão. - Provérbios 18:24",
-    "A luz nasce sobre o justo e a alegria sobre os retos de coração. - Salmos 97:11",
-    "Um olhar animador dá alegria ao coração, e as boas notícias revigoram os ossos. - Provérbios 15:30",
-    "Enquanto estou no mundo, sou a luz do mundo. - João 9:5",
-    "Jesus Cristo é o mesmo, ontem, hoje e para sempre. - Hebreus 13:8",
-    "Meus amados irmãos, tenham isto em mente: Sejam todos prontos para ouvir, tardios para falar e tardios para irar-se. - Tiago 1:19",
-    "E eis que eu estou convosco todos os dias, até a consumação dos séculos. - Mateus 28:20",
-    "A esperança que se retarda deixa o coração doente, mas o anseio satisfeito é árvore de vida. - Provérbios 13:12",
-    "No amor não há medo; antes, o perfeito amor lança fora o medo. - 1 João 4:18",
-    "Escolhi o caminho da fidelidade; decidi seguir as tuas ordenanças. - Salmos 119:30",
-    "O engano está no coração dos que maquinam o mal, mas a alegria está no meio dos que promovem a paz. - Provérbios 12:20",
-    "Pois a palavra do Senhor é verdadeira; Ele é fiel em tudo o que faz. - Salmos 33:4",
-    "Gloriem-se no seu santo nome; alegre-se o coração dos que buscam o Senhor. - 1 Crônicas 16:10",
-    "Os preceitos do Senhor são justos e dão alegria ao coração. Os mandamentos do Senhor são límpidos e trazem luz aos olhos. - Salmos 19:8"
-]
 # AUXILIARY FUNCTIONS
 def update_completion_list(element):
     if "model" in element:
@@ -258,7 +233,7 @@ def open_printer_connection():
 
 def print_parking(code):
     config = get_config()
-    ImpressaoTexto("================================", 1, 8, 0)
+    ImpressaoTexto("================================================", 1, 8, 0)
     AvancaPapel(1)
     ImpressaoTexto("ESTACIONAMENTO C O S T E I R A", 1, 0, 0)
     AvancaPapel(1)
@@ -266,7 +241,7 @@ def print_parking(code):
     AvancaPapel(1)
     ImpressaoTexto(config["printer_header"], 1, 8, 0)
     AvancaPapel(1)
-    ImpressaoTexto("================================", 1, 8, 0)
+    ImpressaoTexto("================================================", 1, 8, 0)
     AvancaPapel(3)
     ImpressaoTexto(f"{in_plate.get()} {in_category.get()}", 1, 8, 33)
     AvancaPapel(3)
@@ -297,6 +272,71 @@ def print_parking(code):
     AvancaPapel(1)
     ImpressaoTexto(f"{datetime.now():%Y-%m-%d %H:%M}", 2, 8, 0)
     CorteTotal(4)
+
+
+def print_report():
+    selected_resp = report_resp_var.get()
+    if selected_resp:
+        date = datetime.now().date()
+        ImpressaoTexto("================================================", 1, 8, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Relatório {selected_resp}", 1, 0, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Data: {date}", 1, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto("================================================", 1, 8, 0)
+        AvancaPapel(3)
+        ImpressaoTexto(f"Total caixa em dinheiro: {report_total_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total caixa no cartão: {report_total_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total de acréscimos: {report_total_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total de descontos: {report_total_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total de veículos: {report_total_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(2)
+        ImpressaoTexto("VEÍCULOS EM ABERTO:", 1, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total: {report_total_open_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"CARROS: {report_total_open_vehicles_1.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"SUVS: {report_total_open_vehicles_2.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"CAMINHONETES: {report_total_open_vehicles_4.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"MOTOS: {report_total_open_vehicles_3.get()}", 0, 1, 0)
+        AvancaPapel(2)
+        ImpressaoTexto("VEÍCULOS FINALIZADOS:", 1, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total: {report_total_finalized_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"CARROS: {report_total_finalized_vehicles_1.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"SUVS: {report_total_finalized_vehicles_2.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"CAMINHONETES: {report_total_finalized_vehicles_4.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"MOTOS: {report_total_finalized_vehicles_3.get()}", 0, 1, 0)
+        AvancaPapel(2)
+        ImpressaoTexto("VEÍCULOS CANCELADOS:", 1, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total: {report_total_canceled_vehicles.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"CARROS: {report_total_canceled_vehicles_1.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"SUVS: {report_total_canceled_vehicles_2.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"CAMINHONETES: {report_total_canceled_vehicles_4.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"MOTOS: {report_total_canceled_vehicles_3.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto("================================================", 1, 8, 0)
+        AvancaPapel(3)
+        Corte(3)
+    else:
+        mb.showwarning("ATENÇÃO", "Primeiro selecione o responsável antes de imprimir")
 
 
 def hash_generator():
@@ -353,9 +393,13 @@ def ending_parking(status):
             if "Desist" in out_quit_return_button.get():
                 plateID = out_plate.get()
                 cancel_parking(plateID=plateID, userID=active_user_name.get())
+                clear_data("out")
+                out_barcode_entry.focus()
             elif out_quit_return_button.get() == "Retorno":
                 plateID = out_plate.get()
                 return_parking(plateID)
+                clear_data("out")
+                out_barcode_entry.focus()
                 
     update_in_grid()
     update_out_grid()
@@ -429,18 +473,19 @@ def mount_out_table():
     global df_out, header_out
     rows = df_out.to_numpy().tolist()
 
-    for col in header_out:
-        out_table.column(col, anchor="center", width=158)
-        out_table.heading(col, text=col, command=lambda col=col : sort_out_table(col))
+    for col_out in header_out:
+        out_table.column(col_out, anchor="center", width=158)
+        out_table.heading(col_out, text=col_out, command=lambda col=col_out : sort_out_table(col))
     for row in rows:
         values = [value for value in row]
         out_table.insert("", 0, values=values, tags="gray")
 
 
-def update_in_grid():
+def update_in_grid(plateID: str = None):
     global df_in
-    df_in = get_today_parkings_as_df_in()
+    df_in = get_today_parkings_as_df_in(plateID)
     mount_in_table()
+    update_out_grid()
 
 
 def update_out_grid():
@@ -623,8 +668,9 @@ def close_exit_tab():
     root_notebook.select(parking_tab)
     root_notebook.tab(login_tab, state="normal")
     root_notebook.tab(exit_tab, state="hidden")
-    if active_user_role == "admin":
+    if active_user_role.get() == "admin":
         root_notebook.tab(config_tab, state="normal")
+        root_notebook.tab(report_tab, state="normal")
     clear_data("out")
     out_barcode_entry.focus()
 
@@ -708,6 +754,12 @@ def calc_report_metrics(event, userID: str):
     report_total_canceled_vehicles_3.set(metrics["total_canceled_cat_3"])
     report_total_canceled_vehicles_4.set(metrics["total_canceled_cat_4"])
 
+
+def export_parking_to_csv():
+    date = datetime.now().date()
+    with get_dal_mysql() as db:
+        open(f'relatorio_{date}.csv', 'w').write(str(db(db.parking.id).select()))
+
 # -----------------------------------------------------------------------------------------------------------
 # NOTEBOOK CONFIG
 # -----------------------------------------------------------------------------------------------------------
@@ -759,7 +811,6 @@ login_button = Button(
     width=15,
     cursor="hand2"
 )
-power_phrase = ttk.Label(login_tab, text=random.choice(phrase), font=('Arial', 15, 'bold'))
 
 # -----------------------------------------------------------------------------------------------------------
 # LOGIN TAB LAYOUT
@@ -767,7 +818,6 @@ power_phrase = ttk.Label(login_tab, text=random.choice(phrase), font=('Arial', 1
 login_entry.place(relx=0.5, y=150, anchor=CENTER)
 password_entry.place(relx=0.5, y=250, anchor=CENTER)
 login_button.place(relx=0.5, y=350, anchor=CENTER)
-power_phrase.place(relx=0.5, y=500, anchor=CENTER)
 
 # -----------------------------------------------------------------------------------------------------------
 # LOGIN TAB COMMANDS
@@ -903,6 +953,8 @@ out_cancel_button = Button(
 # -----------------------------------------------------------------------------------------------------------
 # PARKING TAB WIDJETS - REPORTS
 # -----------------------------------------------------------------------------------------------------------
+in_search_plate_name = ttk.Label(parking_tab, text="FILTRAR POR PLACA:", font=font14)
+in_search_plate_entry = ttk.Entry(parking_tab, textvariable=search_in_plate, font= font14, width=12)
 in_table = ttk.Treeview(report_in_frame, selectmode="browse", show="headings", height=10, columns=header_in)
 in_table.pack(side=TOP, padx=10, pady=5)
 in_table.tag_configure("green", background="lightgreen")
@@ -927,6 +979,8 @@ out_frame_top.pack(side=TOP)
 out_frame_center_top.pack(side=TOP)
 out_frame_center_bottom.pack(side=TOP)
 out_frame_bottom.pack(side=BOTTOM)
+in_search_plate_name.place(x=30, y=360, anchor=NW)
+in_search_plate_entry.place(x=250, y=360, anchor=NW)
 report_out_frame.place(x=500, y=260, anchor=NW)
 report_in_frame.place(relx = 0, rely=0.99, relwidth=1, anchor="sw")
 
@@ -987,6 +1041,10 @@ in_color_entry.bind("<KP_Enter>", enter_ent_button_focus)
 in_confirm_button.bind("<Return>", insert_parking)
 out_finalize_button.bind("<Return>", open_exit_tab)
 
+in_search_plate_entry.bind("<Return>", lambda event: update_in_grid(search_in_plate.get()))
+in_search_plate_entry.bind("<Tab>", lambda event: update_in_grid(search_in_plate.get()))
+in_search_plate_entry.bind("<KP_Enter>", lambda event: update_in_grid(search_in_plate.get()))
+
 in_plate_entry.focus()
 
 # -----------------------------------------------------------------------------------------------------------
@@ -1017,6 +1075,7 @@ total_received_entry_exit_tab = ttk.Entry(
 )
 change_label_exit_tab = ttk.Label(exit_tab, text="Troco:", font=font20)
 change_value_label_exit_tab = ttk.Label(exit_tab, textvariable=change_value, font=font20)
+checkbox_by_cash = ttk.Checkbutton(exit_tab, text="Dinheiro", variable=by_cash, onvalue=True, offvalue=False)
 exit_cancel_button = Button(
     exit_tab,
     text="Cancelar",
@@ -1413,7 +1472,19 @@ report_canceled_total_value = ttk.Label(report_tab_frame, textvariable=report_to
 report_print_button = Button(
     report_tab_frame,
     text="Imprimir",
-    command=add_element,
+    command=print_report,
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+report_export_button = Button(
+    report_tab_frame,
+    text="Exportar",
+    command=export_parking_to_csv,
     font=font14,
     bg="royalblue",
     fg="white",
@@ -1461,7 +1532,7 @@ report_canceled_value_3.place(x=880, y=290, anchor=CENTER)
 report_canceled_value_4.place(x=880, y=330, anchor=CENTER)
 report_canceled_total_value.place(x=880, y=380, anchor=CENTER)
 report_print_button.place(x=880, y=520, anchor=CENTER)
-
+report_export_button.place(x=580, y=520, anchor=CENTER)
 # -----------------------------------------------------------------------------------------------------------
 # REPORT TAB COMMANDS
 # -----------------------------------------------------------------------------------------------------------

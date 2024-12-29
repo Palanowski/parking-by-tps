@@ -20,23 +20,43 @@ def post_parking(parkingModel: ParkingModel):
     return new
 
 
-def get_today_parkings_as_df_in():
+def get_today_parkings_as_df_in(plateID: str = None):
     with get_dal_mysql() as db:
-        parkings = db(db.parking.entry_date == datetime.now().date()).select(
-            db.parking.plate,
-            db.parking.model,
-            db.parking.category,
-            db.parking.color,
-            db.parking.entry_time,
-            db.parking.exit_time,
-            db.parking.delta_time,
-            db.parking.status,
-            db.parking.total_value,
-            db.parking.entry_user,
-            db.parking.exit_user,
-            db.parking.discount,
-            db.parking.addition,
-        ).as_list()
+        if plateID:
+            parkings = db(
+                (db.parking.entry_date == datetime.now().date())
+                & (db.parking.plate==plateID)
+                ).select(
+                    db.parking.plate,
+                    db.parking.model,
+                    db.parking.category,
+                    db.parking.color,
+                    db.parking.entry_time,
+                    db.parking.exit_time,
+                    db.parking.delta_time,
+                    db.parking.status,
+                    db.parking.total_value,
+                    db.parking.entry_user,
+                    db.parking.exit_user,
+                    db.parking.discount,
+                    db.parking.addition,
+                ).as_list()
+        else:
+            parkings = db(db.parking.entry_date == datetime.now().date()).select(
+                db.parking.plate,
+                db.parking.model,
+                db.parking.category,
+                db.parking.color,
+                db.parking.entry_time,
+                db.parking.exit_time,
+                db.parking.delta_time,
+                db.parking.status,
+                db.parking.total_value,
+                db.parking.entry_user,
+                db.parking.exit_user,
+                db.parking.discount,
+                db.parking.addition,
+            ).as_list()
     return pd.DataFrame.from_records(parkings)
 
 def get_today_parkings_as_df_out():

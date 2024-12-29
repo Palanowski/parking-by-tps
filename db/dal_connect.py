@@ -16,7 +16,7 @@ class get_dal_mysql:
 
     def __init__(self):
         # mysql://user:pass@url/db
-        uri = f"mysql://{USER}:{PASSWORD}@{HOST}/{DATABASE}"
+        uri = f"mysql://parking:parking@localhost/parking"
 
         driver_args = {}
         dal_conn = DAL(
