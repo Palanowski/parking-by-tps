@@ -132,7 +132,7 @@ def get_parkings_by_user_order_by_status(userID: str = None, statusID: str = Non
     return result
 
 
-def finalize_parking(plateID, delta_time, userID, total, addition=None, discount=None, byPlate=None):
+def finalize_parking(plateID, delta_time, userID, total, addition=None, discount=None, byPlate=None, byCash=False):
     with get_dal_mysql() as db:
         exit_time = datetime.now().time()
         db((db.parking.plate == plateID) & (db.parking.entry_date == datetime.now().date())).update(
@@ -144,6 +144,7 @@ def finalize_parking(plateID, delta_time, userID, total, addition=None, discount
             addition=addition,
             discount=discount,
             byPlate=byPlate,
+            byCash=byCash,
         )
 
 

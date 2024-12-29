@@ -1,3 +1,4 @@
 #!/bin/sh
 
-sudo -v && python3 main.py
+estenv
+echo "1234" | sudo -S python3 /home/estacionamento/Documentos/parking-by-tps/main.py

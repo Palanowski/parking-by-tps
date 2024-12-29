@@ -1,4 +1,3 @@
-import os
 import random
 import re
 from datetime import datetime, timedelta
@@ -26,11 +25,12 @@ from schemas.users import UsersModel
 
 # CONFIG
 root = Tk()
-root.geometry("1280x720")
+root.geometry("1300x760")
 root.title("Estacionamento Costeira")
 style = ttk.Style()
 style.theme_use('clam')
 style.configure('Treeview.Heading', font=(None, 12, "bold"), height=50)
+style.configure('TCheckbutton', font = 18)
 
 # VARIABLES
 login = StringVar(value="Usuário")
@@ -87,12 +87,14 @@ value_received = StringVar()
 change_value = StringVar(value="0.00")
 addition = StringVar(value="0.00")
 discount = StringVar(value="0.00")
-by_cash = BooleanVar()
+byCashVar = BooleanVar()
 out_quit_return_button = StringVar(value="Desistência")
 
-report_resp_var = StringVar()
+report_resp_var = StringVar(value="GERAL")
 report_total_vehicles = IntVar()
+report_total_cashier = DoubleVar()
 report_total_cash = DoubleVar()
+report_total_card = DoubleVar()
 report_total_add = DoubleVar()
 report_total_discount = DoubleVar()
 report_total_open_vehicles = IntVar()
@@ -286,13 +288,15 @@ def print_report():
         AvancaPapel(1)
         ImpressaoTexto("================================================", 1, 8, 0)
         AvancaPapel(3)
-        ImpressaoTexto(f"Total caixa em dinheiro: {report_total_vehicles.get()}", 0, 1, 0)
+        ImpressaoTexto(f"Total em caixa: {report_total_cashier.get()}", 0, 1, 0)
         AvancaPapel(1)
-        ImpressaoTexto(f"Total caixa no cartão: {report_total_vehicles.get()}", 0, 1, 0)
+        ImpressaoTexto(f"Total caixa em dinheiro: {report_total_cash.get()}", 0, 1, 0)
         AvancaPapel(1)
-        ImpressaoTexto(f"Total de acréscimos: {report_total_vehicles.get()}", 0, 1, 0)
+        ImpressaoTexto(f"Total caixa no cartão: {report_total_card.get()}", 0, 1, 0)
         AvancaPapel(1)
-        ImpressaoTexto(f"Total de descontos: {report_total_vehicles.get()}", 0, 1, 0)
+        ImpressaoTexto(f"Total de acréscimos: {report_total_add.get()}", 0, 1, 0)
+        AvancaPapel(1)
+        ImpressaoTexto(f"Total de descontos: {report_total_discount.get()}", 0, 1, 0)
         AvancaPapel(1)
         ImpressaoTexto(f"Total de veículos: {report_total_vehicles.get()}", 0, 1, 0)
         AvancaPapel(2)
@@ -385,6 +389,7 @@ def ending_parking(status):
             addition.get(),
             discount.get(),
             byPlateVar.get(),
+            byCashVar.get(),
         )
         close_exit_tab()
     elif status == "DESISTIR|RETORNAR":
@@ -484,6 +489,7 @@ def mount_out_table():
 def update_in_grid(plateID: str = None):
     global df_in
     df_in = get_today_parkings_as_df_in(plateID)
+    search_in_plate.set(None)
     mount_in_table()
     update_out_grid()
 
@@ -589,6 +595,10 @@ def clear_data(element):
         out_plate_entry.focus()
 
 
+def clear_data_records_func():
+    clear_data_records()
+    update_in_grid()
+
 def on_click(event):
     event.widget.delete(0, END)
 
@@ -658,7 +668,8 @@ def open_exit_tab(event):
         delta_minutes = int(delta_time_total.seconds/60)-delta_hours*60
         delta_time.set(f"{delta_hours} hora(s), {delta_minutes} minuto(s)")
         total_value.set(calc_total_value(delta_hours, delta_minutes))
-        total_received_entry_exit_tab.focus()
+        byCashVar.set(value=False)
+        exit_finalize_button.focus()
     else:
         mb.showwarning("ALERTA", "Não é possível finalizar um veículo que não está EM ABERTO")
 
@@ -735,7 +746,9 @@ def calc_report_metrics(event, userID: str):
         parkings = get_parkings_by_user_order_by_status(userID=userID, statusID="EM ABERTO") + parkings_closed
     metrics = calc_metrics(parkings=parkings)
     report_total_vehicles.set(metrics["total_count"])
+    report_total_cashier.set(metrics["total_cashier"])
     report_total_cash.set(metrics["total_cash"])
+    report_total_card.set(metrics["total_card"])
     report_total_add.set(metrics["total_add"])
     report_total_discount.set(metrics["total_discount"])
     report_total_open_vehicles.set(metrics["total_open_vehicles"])
@@ -758,8 +771,22 @@ def calc_report_metrics(event, userID: str):
 def export_parking_to_csv():
     date = datetime.now().date()
     with get_dal_mysql() as db:
-        open(f'relatorio_{date}.csv', 'w').write(str(db(db.parking.id).select()))
+        open(f'/home/estacionamento/Documentos/relatorio_{date}.csv', 'w').write(str(db(db.parking.id).select()))
 
+
+def set_checkbox_cash(event):
+    state = byCashVar.get()
+    if state:
+        byCashVar.set(False)
+    else:
+        byCashVar.set(True)
+
+
+def on_tab_change(event):
+    tab = event.widget.tab('current')['text']
+    if tab == "Relatórios":
+        calc_report_metrics("teste", "GERAL")
+    
 # -----------------------------------------------------------------------------------------------------------
 # NOTEBOOK CONFIG
 # -----------------------------------------------------------------------------------------------------------
@@ -787,6 +814,8 @@ count_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=5
 count_frame.place(relx=0.5, y=0, anchor=NE)
 count_total_label = ttk.Label(count_frame, textvariable=total_count, font=font13)
 count_total_label.pack(side=LEFT)
+
+root_notebook.bind('<<NotebookTabChanged>>', on_tab_change)
 
 # -----------------------------------------------------------------------------------------------------------
 # LOGIN TAB WIDJETS
@@ -979,8 +1008,8 @@ out_frame_top.pack(side=TOP)
 out_frame_center_top.pack(side=TOP)
 out_frame_center_bottom.pack(side=TOP)
 out_frame_bottom.pack(side=BOTTOM)
-in_search_plate_name.place(x=30, y=360, anchor=NW)
-in_search_plate_entry.place(x=250, y=360, anchor=NW)
+in_search_plate_name.place(x=30, y=380, anchor=NW)
+in_search_plate_entry.place(x=250, y=380, anchor=NW)
 report_out_frame.place(x=500, y=260, anchor=NW)
 report_in_frame.place(relx = 0, rely=0.99, relwidth=1, anchor="sw")
 
@@ -1075,7 +1104,7 @@ total_received_entry_exit_tab = ttk.Entry(
 )
 change_label_exit_tab = ttk.Label(exit_tab, text="Troco:", font=font20)
 change_value_label_exit_tab = ttk.Label(exit_tab, textvariable=change_value, font=font20)
-checkbox_by_cash = ttk.Checkbutton(exit_tab, text="Dinheiro", variable=by_cash, onvalue=True, offvalue=False)
+checkbox_by_cash = ttk.Checkbutton(exit_tab, text="Dinheiro", variable=byCashVar, onvalue=True, offvalue=False)
 exit_cancel_button = Button(
     exit_tab,
     text="Cancelar",
@@ -1149,6 +1178,7 @@ delta_time_label_exit_tab.place(relx=0.65, y=415, anchor=SE)
 delta_time_value_label_exit_tab.place(relx=0.665, y=415, anchor=SW)
 total_label_exit_tab.place(relx=0.5, y=470, anchor=NW)
 total_value_label_exit_tab.place(relx=0.85, y=490, anchor=CENTER)
+checkbox_by_cash.place(relx=0.75, y=560, anchor=NW)
 total_received_label_exit_tab.place(relx=0.1, y=450, anchor=NW)
 total_received_entry_exit_tab.place(relx=0.1, y=500, anchor=NW)
 change_label_exit_tab.place(relx=0.1, y=550, anchor=NW)
@@ -1318,7 +1348,7 @@ add_clear_title = ttk.Label(add_clear_frame, text="LIMPEZA DE DADOS", justify="c
 add_clear_button = Button(
     add_clear_frame,
     text="Remover",
-    command=clear_data_records,
+    command=clear_data_records_func,
     font=font14,
     bg="royalblue",
     fg="white",
@@ -1447,8 +1477,13 @@ report_veh_name_2 = ttk.Label(report_tab_frame, text="SUV:", font=font14)
 report_veh_name_3 = ttk.Label(report_tab_frame, text="MOTOCICLETA:", font=font14)
 report_veh_name_4 = ttk.Label(report_tab_frame, text="CAMINHONETE:", font=font14)
 report_veh_total = ttk.Label(report_tab_frame, text="TOTAL:", font=font14)
-report_total_cash_name = ttk.Label(report_tab_frame, text="Valor em caixa:", font=font14)
+report_total_cash_title = ttk.Label(report_tab_frame, text="Total caixa:", font=font14)
+report_total_cash_name = ttk.Label(report_tab_frame, text="Dinheiro:", font=font14)
 report_total_cash_value = ttk.Label(report_tab_frame, textvariable=report_total_cash, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_total_card_name = ttk.Label(report_tab_frame, text="Cartão:", font=font14)
+report_total_card_value = ttk.Label(report_tab_frame, textvariable=report_total_card, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_total_cashier_name = ttk.Label(report_tab_frame, text="Total:", font=font14)
+report_total_cashier_value = ttk.Label(report_tab_frame, textvariable=report_total_cashier, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_total_add_name = ttk.Label(report_tab_frame, text="Acréscimos:", font=font14)
 report_total_add_value = ttk.Label(report_tab_frame, textvariable=report_total_add, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_total_disc_name = ttk.Label(report_tab_frame, text="Descontos:", font=font14)
@@ -1510,8 +1545,13 @@ report_veh_name_3.place(x=190, y=280, anchor=NE)
 report_veh_name_4.place(x=190, y=320, anchor=NE)
 report_separator.place(x=100, y=355, width=900)
 report_veh_total.place(x=190, y=370, anchor=NE)
-report_total_cash_name.place(x=300, y=420, anchor=CENTER)
+report_total_cash_title.place(x=300, y=420, anchor=CENTER)
+report_total_cash_name.place(x=190, y=450, anchor=NE)
 report_total_cash_value.place(x=300, y=460, anchor=CENTER)
+report_total_card_name.place(x=190, y=490, anchor=NE)
+report_total_card_value.place(x=300, y=500, anchor=CENTER)
+report_total_cashier_name.place(x=190, y=530, anchor=NE)
+report_total_cashier_value.place(x=300, y=540, anchor=CENTER)
 report_total_add_name.place(x=580, y=420, anchor=CENTER)
 report_total_add_value.place(x=580, y=460, anchor=CENTER)
 report_total_disc_name.place(x=880, y=420, anchor=CENTER)
@@ -1540,6 +1580,7 @@ report_resp_entry.bind("<<ComboboxSelected>>", lambda event: calc_report_metrics
 report_resp_entry.bind("<Return>", lambda event: calc_report_metrics(event, report_resp_var.get()))
 report_resp_entry.bind("<Tab>", lambda event: calc_report_metrics(event, report_resp_var.get()))
 report_resp_entry.bind("<KP_Enter>", lambda event: calc_report_metrics(event, report_resp_var.get()))
+report_tab_frame.bind_all("<KeyPress-d>", set_checkbox_cash)
 
 if __name__ == "__main__":
     open_printer_connection()

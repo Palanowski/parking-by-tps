@@ -40,6 +40,9 @@ def total_open_vehicles_cat_4(userID: str = None):
 def calc_metrics(parkings: list):
     total_cash_list = [parking["total_value"] for parking in parkings if parking["byCash"]==True]
     total_cash = sum(total_cash_list) if len(total_cash_list)>0 else 0
+    total_card_list = [parking["total_value"] for parking in parkings if parking["total_value"] and (parking["byCash"]==False)]
+    total_card = sum(total_card_list) if len(total_card_list)>0 else 0
+    total_cashier = sum([total_cash, total_card])
     total_add_list = [parking["addition"] for parking in parkings if parking["addition"]]
     total_add = sum(total_add_list) if len(total_add_list)>0 else 0
     total_discount_list = [parking["discount"] for parking in parkings if parking["discount"]]
@@ -61,7 +64,9 @@ def calc_metrics(parkings: list):
     canceled_vehicles_cat_4 = [parking for parking in canceled_vehicles if parking["category"]=="4-CAMINHONETE"]
     return dict(
         total_count=len(parkings),
+        total_cashier=total_cashier,
         total_cash=total_cash,
+        total_card=total_card,
         total_add=total_add,
         total_discount=total_discount,
         total_open_vehicles=len(open_vehicles),
