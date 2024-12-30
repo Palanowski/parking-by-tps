@@ -36,6 +36,9 @@ style.configure('TCheckbutton', font = 18)
 login = StringVar(value="Usuário")
 password = StringVar(value="Senha")
 
+confirm_login = StringVar(value="Usuário")
+confirm_password = StringVar(value="Senha")
+
 active_user_name = StringVar(value="-efetuar login-")
 active_user_role = StringVar()
 
@@ -200,6 +203,23 @@ def login_verification(event):
     else:
         mb.showwarning("OPS", "Usuário inválido.")
 
+
+def login_confirmation(event):
+    user = get_user_by_id(confirm_login.get())
+    if user:
+        if user["password"] == confirm_password.get():
+            if user["role"] == "admin":
+                login_modal.destroy()
+                if "Config" in event:
+                    root_notebook.select(config_tab)
+                elif "Relat" in event:
+                    root_notebook.select(report_tab)
+            else:
+                root_notebook.select(parking_tab)
+                mb.showwarning("OPS", "Usuário não tem permissão para acesso.")
+    else:
+        root_notebook.select(parking_tab)
+        mb.showwarning("OPS", "Usuário inválido.")
 
 def ask_for_password(userID, tab):
     user = get_user_by_id(userID)
@@ -787,11 +807,42 @@ def set_checkbox_cash(event):
         byCashVar.set(True)
 
 
+# def open_login_modal(tab):
+#     login_modal = Toplevel()
+#     login_modal.protocol("WM_DELETE_WINDOW", go_to_parking_tab)
+#     login_modal.geometry("350x250+650+360")
+#     login_modal.title("Confirmação de usuário admin")
+#     login_modal_user_entry = AutocompleteCombobox(login_modal, font=font14,textvariable=confirm_login, completevalues=get_all_users())
+#     login_modal_user_entry.pack(side=TOP, padx=20, pady=20)
+#     login_modal_password_entry = ttk.Entry(login_modal, font=font14, textvariable=confirm_password)
+#     login_modal_password_entry.pack(side=TOP)
+#     login_modal_password_entry.bind("<Button-1>", on_click)
+#     login_modal_confirm_button = Button(
+#         login_modal,
+#         text="Confirmar",
+#         font=font14,
+#         command= lambda event=tab: login_confirmation(event),
+#         bg="royalblue",
+#         fg="white",
+#         activebackground="coral1",
+#         activeforeground="black",
+#         width=15,
+#     )
+#     login_modal_confirm_button.pack(side=TOP, padx=20, pady=20)
+
+
 def on_tab_change(event):
     tab = event.widget.tab('current')['text']
-    if tab == "Relatórios":
+    if "Relat" in tab:
         calc_report_metrics("teste", "GERAL")
-    
+    #     open_login_modal(tab)
+    # elif "Config" in tab:
+    #     open_login_modal(tab)
+
+
+# def go_to_parking_tab():
+#     root_notebook.select(parking_tab)
+#     login_modal.destroy()
 # -----------------------------------------------------------------------------------------------------------
 # NOTEBOOK CONFIG
 # -----------------------------------------------------------------------------------------------------------
@@ -822,6 +873,8 @@ count_total_label.pack(side=LEFT)
 
 root_notebook.bind('<<NotebookTabChanged>>', on_tab_change)
 
+# login_modal = Toplevel()
+# login_modal.protocol("WM_DELETE_WINDOW", go_to_parking_tab)
 # -----------------------------------------------------------------------------------------------------------
 # LOGIN TAB WIDJETS
 # -----------------------------------------------------------------------------------------------------------
@@ -1599,4 +1652,6 @@ if __name__ == "__main__":
     df_out = get_today_parkings_as_df_out()
     mount_in_table()
     mount_out_table()
+    # login_modal.destroy()
     root.mainloop()
+    
