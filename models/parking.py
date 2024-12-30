@@ -25,7 +25,7 @@ def get_today_parkings_as_df_in(plateID: str = None):
         if plateID:
             parkings = db(
                 (db.parking.entry_date == datetime.now().date())
-                & (db.parking.plate==plateID)
+                & (db.parking.plate.like(f"{plateID}%"))
                 ).select(
                     db.parking.plate,
                     db.parking.model,

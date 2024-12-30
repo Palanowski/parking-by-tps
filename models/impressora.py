@@ -1,7 +1,7 @@
 import ctypes
 
 
-ffi = ctypes.cdll.LoadLibrary("./libE1_Impressora.so")
+ffi = ctypes.cdll.LoadLibrary("/home/estacionamento/Documentos/parking-by-tps/libE1_Impressora.so")
 
 def AbreConexaoImpressora(tipo, modelo, conexao, param):
     fn = ffi.AbreConexaoImpressora

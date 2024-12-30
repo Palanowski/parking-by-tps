@@ -378,7 +378,7 @@ def insert_parking(event):
         in_plate_entry.focus()
 
 
-def ending_parking(status):
+def ending_parking(event, status):
     if status == "FINALIZAR":
         plateID = out_plate.get()
         finalize_parking(
@@ -489,7 +489,6 @@ def mount_out_table():
 def update_in_grid(plateID: str = None):
     global df_in
     df_in = get_today_parkings_as_df_in(plateID)
-    search_in_plate.set(None)
     mount_in_table()
     update_out_grid()
 
@@ -535,6 +534,7 @@ def check_element(event, element):
             out_category.set(parking["category"])
             out_color.set(parking["color"])
             byPlateVar.set(True)
+            out_finalize_button.focus()
             if parking["status"] != "EM ABERTO":
                 out_quit_return_button.set("Retorno")
                 out_cancel_button.focus()
@@ -593,6 +593,9 @@ def clear_data(element):
         out_category.set("")
         out_color.set("")
         out_plate_entry.focus()
+        addition.set("0.00")
+        discount.set("0.00")
+        change_value.set("0.00")
 
 
 def clear_data_records_func():
@@ -609,8 +612,10 @@ def calc_change(event):
 
 def apply_add_and_discount(event, action: str):
     if action == "ADD":
+        addition.set(format(float(addition.get()), '.2f'))
         total = float(total_value.get()) + float(addition.get())
     if action == "DISC":
+        discount.set(format(float(discount.get()), '.2f'))
         total = float(total_value.get()) - float(discount.get())
     total_value.set(format(total, '.2f'))
     exit_finalize_button.focus()
@@ -746,11 +751,11 @@ def calc_report_metrics(event, userID: str):
         parkings = get_parkings_by_user_order_by_status(userID=userID, statusID="EM ABERTO") + parkings_closed
     metrics = calc_metrics(parkings=parkings)
     report_total_vehicles.set(metrics["total_count"])
-    report_total_cashier.set(metrics["total_cashier"])
-    report_total_cash.set(metrics["total_cash"])
-    report_total_card.set(metrics["total_card"])
-    report_total_add.set(metrics["total_add"])
-    report_total_discount.set(metrics["total_discount"])
+    report_total_cashier.set(format(float(metrics["total_cashier"]), '.2f'))
+    report_total_cash.set(format(float(metrics["total_cash"]), '.2f'))
+    report_total_card.set(format(float(metrics["total_card"]), '.2f'))
+    report_total_add.set(format(float(metrics["total_add"]), '.2f'))
+    report_total_discount.set(format(float(metrics["total_discount"]), '.2f'))
     report_total_open_vehicles.set(metrics["total_open_vehicles"])
     report_total_open_vehicles_1.set(metrics["total_open_cat_1"])
     report_total_open_vehicles_2.set(metrics["total_open_cat_2"])
@@ -934,7 +939,6 @@ in_color_label = ttk.Label(in_frame_center, text="Cor", font=font18)
 # PARKING TAB WIDJETS - EXIT
 # -----------------------------------------------------------------------------------------------------------
 out_title = ttk.Label(out_frame_top, text="SAÍDA", justify="center", font=font20)
-out_plate_entry = ttk.Entry(out_frame_center_top, width=10, font=font20, textvariable=out_plate)
 out_plate_label = ttk.Label(out_frame_center_top, text="Placa", font=font18)
 out_barcode_entry = ttk.Entry(out_frame_center_top, width=15, font=font20, textvariable=barcodeVar)
 out_barcode_label = ttk.Label(out_frame_center_top, text="Código de barras", font=font18)
@@ -944,6 +948,7 @@ out_category_label = ttk.Label(out_frame_center_bottom, text="Categoria: ", font
 out_category_value = ttk.Label(out_frame_center_bottom, textvariable=out_category, font=font18, width=12)
 out_color_label = ttk.Label(out_frame_center_bottom, text="Cor: ", font=font18)
 out_color_value = ttk.Label(out_frame_center_bottom, textvariable=out_color, font=font18, width=13)
+out_plate_entry = ttk.Entry(out_frame_center_top, width=10, font=font20, textvariable=out_plate)
 out_finalize_button = Button(
     out_frame_bottom,
     text="Finalizar",
@@ -971,7 +976,7 @@ out_cancel_button = Button(
     out_frame_bottom,
     textvariable=out_quit_return_button,
     font=font18,
-    command= lambda status="DESISTIR|RETORNAR": ending_parking(status),
+    command= lambda status="DESISTIR|RETORNAR": ending_parking("click", status),
     bg="lightblue",
     activebackground="coral1",
     activeforeground="white",
@@ -1068,8 +1073,11 @@ in_color_entry.bind("<Tab>", enter_ent_button_focus)
 in_color_entry.bind("<KP_Enter>", enter_ent_button_focus)
 
 in_confirm_button.bind("<Return>", insert_parking)
+in_confirm_button.bind("<KP_Enter>", insert_parking)
 out_finalize_button.bind("<Return>", open_exit_tab)
+out_finalize_button.bind("<KP_Enter>", open_exit_tab)
 
+in_search_plate_entry.bind("<KeyPress>", lambda event: update_in_grid(search_in_plate.get()))
 in_search_plate_entry.bind("<Return>", lambda event: update_in_grid(search_in_plate.get()))
 in_search_plate_entry.bind("<Tab>", lambda event: update_in_grid(search_in_plate.get()))
 in_search_plate_entry.bind("<KP_Enter>", lambda event: update_in_grid(search_in_plate.get()))
@@ -1120,7 +1128,7 @@ exit_finalize_button = Button(
     exit_tab,
     text="Finalizar",
     font=('Arial', 25, 'bold'),
-    command=lambda status="FINALIZAR": ending_parking(status),
+    command=lambda status="FINALIZAR": ending_parking("click", status),
     bg="royalblue",
     fg="white",
     activebackground="coral1",
@@ -1146,6 +1154,8 @@ addition_entry_exit_tab = ttk.Entry(
 # -----------------------------------------------------------------------------------------------------------
 # EXIT TAB COMMANDS
 # -----------------------------------------------------------------------------------------------------------
+exit_finalize_button.bind("<Return>", lambda event: ending_parking(event, "FINALIZAR"))
+exit_finalize_button.bind("<KP_Enter>", lambda event: ending_parking(event, "FINALIZAR"))
 total_received_entry_exit_tab.bind("<Return>", calc_change)
 total_received_entry_exit_tab.bind("<Tab>", calc_change)
 total_received_entry_exit_tab.bind("<KP_Enter>", calc_change)
