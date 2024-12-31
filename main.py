@@ -431,7 +431,7 @@ def ending_parking(event, status):
                 return_parking(plateID)
                 clear_data("out")
                 out_barcode_entry.focus()
-                
+    out_quit_return_button.set("Desistência")
     update_in_grid()
     update_out_grid()
 
