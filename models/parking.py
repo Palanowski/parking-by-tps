@@ -20,6 +20,15 @@ def post_parking(parkingModel: ParkingModel):
     return new
 
 
+def get_parkings_plates():
+    with get_dal_mysql() as db:
+        parkings = db(db.parking.entry_date == datetime.now().date()).select(db.parking.plate).as_list()
+    plates = list()
+    for parking in parkings:
+        plates.append(parking["plate"])
+    return plates
+
+
 def get_today_parkings_as_df_in(plateID: str = None):
     with get_dal_mysql() as db:
         if plateID:

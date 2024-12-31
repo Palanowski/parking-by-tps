@@ -1,3 +1,4 @@
+import pandas as pd
 import random
 import re
 from datetime import datetime, timedelta
@@ -167,6 +168,10 @@ def update_completion_list(element):
         users = get_all_users()
         login_entry.configure(values=users)
         add_user_name_entry.configure(values=users)
+    elif "plate":
+        plates = get_parkings_plates()
+        out_plate_entry.configure(values=plates)
+
 
 def calc_total_count():
     prefix = random.randint(1000, 9999)
@@ -204,22 +209,22 @@ def login_verification(event):
         mb.showwarning("OPS", "Usuário inválido.")
 
 
-def login_confirmation(event):
-    user = get_user_by_id(confirm_login.get())
-    if user:
-        if user["password"] == confirm_password.get():
-            if user["role"] == "admin":
-                login_modal.destroy()
-                if "Config" in event:
-                    root_notebook.select(config_tab)
-                elif "Relat" in event:
-                    root_notebook.select(report_tab)
-            else:
-                root_notebook.select(parking_tab)
-                mb.showwarning("OPS", "Usuário não tem permissão para acesso.")
-    else:
-        root_notebook.select(parking_tab)
-        mb.showwarning("OPS", "Usuário inválido.")
+# def login_confirmation(event):
+#     user = get_user_by_id(confirm_login.get())
+#     if user:
+#         if user["password"] == confirm_password.get():
+#             if user["role"] == "admin":
+#                 login_modal.destroy()
+#                 if "Config" in event:
+#                     root_notebook.select(config_tab)
+#                 elif "Relat" in event:
+#                     root_notebook.select(report_tab)
+#             else:
+#                 root_notebook.select(parking_tab)
+#                 mb.showwarning("OPS", "Usuário não tem permissão para acesso.")
+#     else:
+#         root_notebook.select(parking_tab)
+#         mb.showwarning("OPS", "Usuário inválido.")
 
 def ask_for_password(userID, tab):
     user = get_user_by_id(userID)
@@ -395,6 +400,7 @@ def insert_parking(event):
         in_color.set("")
         update_in_grid()
         update_out_grid()
+        update_completion_list("plate")
         in_plate_entry.focus()
 
 
@@ -555,7 +561,7 @@ def check_element(event, element):
             out_color.set(parking["color"])
             byPlateVar.set(True)
             out_finalize_button.focus()
-            if parking["status"] != "EM ABERTO":
+            if parking["status"] in ["CANCELADO", "FINALIZADO"]:
                 out_quit_return_button.set("Retorno")
                 out_cancel_button.focus()
             else:
@@ -571,7 +577,7 @@ def check_element(event, element):
             out_category.set(parking["category"])
             out_color.set(parking["color"])
             byPlateVar.set(False)
-            if parking["status"] != "EM ABERTO":
+            if parking["status"] in ["CANCELADO", "FINALIZADO"]:
                 out_quit_return_button.set("Retorno")
             else:
                 open_exit_tab("barcode")
@@ -794,9 +800,37 @@ def calc_report_metrics(event, userID: str):
 
 
 def export_parking_to_csv():
-    date = datetime.now().date()
+    date = datetime.now().strftime("%Y_%m_%d")
     with get_dal_mysql() as db:
-        open(f'/home/estacionamento/Documentos/relatorio_{date}.csv', 'w').write(str(db(db.parking.id).select()))
+        parkings = db().select(db.parking.ALL).as_list()
+        report = list()
+        for parking in parkings:
+            line = dict(
+                id=parking["id"],
+                placa=parking["plate"],
+                modelo=parking["model"],
+                categoria=parking["category"],
+                cor=parking["color"],
+                data=parking["entry_date"],
+                entrada=parking["entry_time"],
+                saida=parking["exit_time"],
+                permanencia=parking["delta_time"],
+                status=parking["status"],
+                usuario_entrada=parking["entry_user"],
+                usuario_saida=parking["exit_user"],
+                total=parking["total_value"],
+                retorno="RETORNO" if parking["ISreturn"] else "NORMAL",
+                parcial=parking["partialPayment"],
+                acrescimo=parking["addition"],
+                desconto=parking["discount"],
+                tipo_fechamento="PLACA" if parking["byPlate"] else "CODIGO-DE-BARRAS",
+                pagamento="DINHEIRO" if parking["byCash"] else "CARTÃO",
+            )
+            report.append(line)
+        report_df = pd.DataFrame(report)
+        report_df.to_csv(f"/home/estacionamento/Documentos/relatorio_{date}.csv", header=True)
+        open(f'/home/estacionamento/Documentos/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
+        mb.showinfo("SUCESSO", "Planilhas exportadas com sucesso na pasta Documentos.")
 
 
 def set_checkbox_cash(event):
@@ -1001,7 +1035,7 @@ out_category_label = ttk.Label(out_frame_center_bottom, text="Categoria: ", font
 out_category_value = ttk.Label(out_frame_center_bottom, textvariable=out_category, font=font18, width=12)
 out_color_label = ttk.Label(out_frame_center_bottom, text="Cor: ", font=font18)
 out_color_value = ttk.Label(out_frame_center_bottom, textvariable=out_color, font=font18, width=13)
-out_plate_entry = ttk.Entry(out_frame_center_top, width=10, font=font20, textvariable=out_plate)
+out_plate_entry = AutocompleteCombobox(out_frame_center_top, width=10, font=font20, textvariable=out_plate, completevalues=get_parkings_plates())
 out_finalize_button = Button(
     out_frame_bottom,
     text="Finalizar",
@@ -1108,6 +1142,7 @@ out_plate_entry.bind("<KP_Enter>", lambda event: check_element(event, "out plate
 out_barcode_entry.bind("<Return>", lambda event: check_element(event, "barcode"))
 out_barcode_entry.bind("<Tab>", lambda event: check_element(event, "barcode"))
 out_barcode_entry.bind("<KP_Enter>", lambda event: check_element(event, "barcode"))
+out_barcode_entry.bind("<Button-1>", on_click)
 
 in_plate_entry.bind("<Return>", lambda event: check_element(event, "in plate"))
 in_plate_entry.bind("<Tab>", lambda event: check_element(event, "in plate"))

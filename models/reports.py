@@ -47,7 +47,7 @@ def calc_metrics(parkings: list):
     total_add = sum(total_add_list) if len(total_add_list)>0 else 0
     total_discount_list = [parking["discount"] for parking in parkings if parking["discount"]]
     total_discount = sum(total_discount_list) if len(total_discount_list)>0 else 0
-    open_vehicles = [parking for parking in parkings if parking["status"]=="EM ABERTO"]
+    open_vehicles = [parking for parking in parkings if parking["status"]in["EM ABERTO", "RETORNO"]]
     open_vehicles_cat_1 = [parking for parking in open_vehicles if parking["category"]=="1-CARRO"]
     open_vehicles_cat_2 = [parking for parking in open_vehicles if parking["category"]=="2-SUV"]
     open_vehicles_cat_3 = [parking for parking in open_vehicles if parking["category"]=="3-MOTO"]
