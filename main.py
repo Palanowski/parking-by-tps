@@ -254,13 +254,12 @@ def logout():
 
 
 def open_printer_connection():
-    status = AbreConexaoImpressora(
+    AbreConexaoImpressora(
         1,
         "I8",
         "USB",
         0
     )
-    return True if status == 0 else False
 
 
 def reconnect_printer():
@@ -1712,7 +1711,7 @@ report_resp_entry.bind("<KP_Enter>", lambda event: calc_report_metrics(event, re
 report_tab_frame.bind_all("<KeyPress-d>", set_checkbox_cash)
 
 if __name__ == "__main__":
-    printer_status.set(open_printer_connection())
+    open_printer_connection()
     global df_in, df_out
     df_in = get_today_parkings_as_df_in()
     df_out = get_today_parkings_as_df_out()
