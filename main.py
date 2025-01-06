@@ -45,6 +45,8 @@ active_user_role = StringVar()
 
 total_count = StringVar(value="XXXXXX")
 
+printer_status = BooleanVar()
+
 new_user_name = StringVar()
 new_user_password = StringVar()
 new_user_role = StringVar()
@@ -72,9 +74,9 @@ config_printer_footer = StringVar()
 
 search_in_plate = StringVar()
 in_plate = StringVar()
-in_model = StringVar()
-in_category = StringVar()
-in_color = StringVar()
+in_model = StringVar(value="MODELO")
+in_category = StringVar(value="CATEGORIA")
+in_color = StringVar(value="COR")
 in_time = StringVar()
 
 barcodeVar = StringVar(value="")
@@ -117,7 +119,9 @@ report_total_canceled_vehicles_2 = IntVar()
 report_total_canceled_vehicles_3 = IntVar()
 report_total_canceled_vehicles_4 = IntVar()
 
-order = True
+order_in = True
+order_out = True
+
 header_in = [
     "Placa",
     "Modelo",
@@ -128,8 +132,8 @@ header_in = [
     "Permanência",
     "Status",
     "Total",
-    "Usuário E",
-    "Usuário S",
+    "Usuário_E",
+    "Usuário_S",
     "Desconto",
     "Acréscimo",
 ]
@@ -250,12 +254,27 @@ def logout():
 
 
 def open_printer_connection():
-    AbreConexaoImpressora(
+    status = AbreConexaoImpressora(
         1,
         "I8",
         "USB",
         0
     )
+    return True if status == 0 else False
+
+
+def reconnect_printer():
+    FechaConexaoImpressora()
+    status = AbreConexaoImpressora(
+        1,
+        "I8",
+        "USB",
+        0
+    )
+    if status == 0:
+        mb.showinfo("SUCESSO", "Impressora conectada com sucesso.")
+    else:
+        mb.showwarning("ALERTA", "Não foi possíve conectar com a impressora, verifique se ela está ligada e se o cabo está conectado.")
 
 
 def print_parking(code):
@@ -349,7 +368,7 @@ def print_report():
         AvancaPapel(1)
         ImpressaoTexto(f"MOTOS: {report_total_finalized_vehicles_3.get()}", 0, 1, 0)
         AvancaPapel(2)
-        ImpressaoTexto("VEÍCULOS CANCELADOS:", 1, 1, 0)
+        ImpressaoTexto("VEÍCULOS DESISTENTES:", 1, 1, 0)
         AvancaPapel(1)
         ImpressaoTexto(f"Total: {report_total_canceled_vehicles.get()}", 0, 1, 0)
         AvancaPapel(1)
@@ -394,10 +413,7 @@ def insert_parking(event):
         post_parking(parking_model)
         calc_total_count()
         print_parking(parking_model.barcode)
-        in_plate.set("")
-        in_model.set("")
-        in_category.set("")
-        in_color.set("")
+        clear_data("in")
         update_in_grid()
         update_out_grid()
         update_completion_list("plate")
@@ -493,7 +509,7 @@ def mount_in_table():
         elif values[7] == "FINALIZADO":
             bg_tag = "gray"
             out_table.insert("", 0, values=values, tags=bg_tag)
-        elif values[7] == "CANCELADO":
+        elif values[7] == "DESISTÊNCIA":
             bg_tag = "red"
             out_table.insert("", 0, values=values, tags=bg_tag)
         in_table.insert("", 0, values=values, tags=bg_tag)
@@ -561,7 +577,7 @@ def check_element(event, element):
             out_color.set(parking["color"])
             byPlateVar.set(True)
             out_finalize_button.focus()
-            if parking["status"] in ["CANCELADO", "FINALIZADO"]:
+            if parking["status"] in ["DESISTÊNCIA", "FINALIZADO"]:
                 out_quit_return_button.set("Retorno")
                 out_cancel_button.focus()
             else:
@@ -577,7 +593,7 @@ def check_element(event, element):
             out_category.set(parking["category"])
             out_color.set(parking["color"])
             byPlateVar.set(False)
-            if parking["status"] in ["CANCELADO", "FINALIZADO"]:
+            if parking["status"] in ["DESISTÊNCIA", "FINALIZADO"]:
                 out_quit_return_button.set("Retorno")
             else:
                 open_exit_tab("barcode")
@@ -608,9 +624,9 @@ def enter_ent_button_focus(event):
 def clear_data(element):
     if "in" in element:
         in_plate.set("")
-        in_model.set("")
-        in_category.set("")
-        in_color.set("")
+        in_model.set("MODELO")
+        in_category.set("CATEGORIA")
+        in_color.set("COR")
         in_plate_entry.focus()
     if "out" in element:
         out_plate.set("")
@@ -828,7 +844,7 @@ def export_parking_to_csv():
             )
             report.append(line)
         report_df = pd.DataFrame(report)
-        report_df.to_csv(f"/home/estacionamento/Documentos/relatorio_{date}.csv", header=True)
+        report_df.to_csv(f"./relatorio_{date}.csv", header=True)
         open(f'/home/estacionamento/Documentos/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
         mb.showinfo("SUCESSO", "Planilhas exportadas com sucesso na pasta Documentos.")
 
@@ -904,6 +920,21 @@ count_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=5
 count_frame.place(relx=0.5, y=0, anchor=NE)
 count_total_label = ttk.Label(count_frame, textvariable=total_count, font=font13)
 count_total_label.pack(side=LEFT)
+printer_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
+printer_frame.place(relx=0.8, y=0, anchor=NE)
+printer_name_label = ttk.Label(printer_frame, text="Impressora:", font=font13)
+printer_name_label.pack(side=LEFT)
+printer_button = Button(
+    printer_frame,
+    text="Testar conexão",
+    font=('Arial', 8, 'bold'),
+    command= reconnect_printer,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+)
+printer_button.pack(side=LEFT)
 
 root_notebook.bind('<<NotebookTabChanged>>', on_tab_change)
 
@@ -1183,12 +1214,12 @@ out_color_label_exit_tab = ttk.Label(exit_tab, text="Cor: ", font=font45)
 out_color_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_color, font=('Arial', 50, 'bold'))
 out_category_label_exit_tab = ttk.Label(exit_tab, text="Categoria: ", font=font45)
 out_category_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_category, font=('Arial', 55, 'bold'))
-in_time_label_exit_tab = ttk.Label(exit_tab, text="Entrada: ", font=('Arial', 30))
-in_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=in_time, font=('Arial', 35))
-out_time_label_exit_tab = ttk.Label(exit_tab, text="Saída: ", font=('Arial', 30))
-out_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_time, font=('Arial', 35))
-delta_time_label_exit_tab = ttk.Label(exit_tab, text="Permanência: ", font=('Arial', 30))
-delta_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=delta_time, font=('Arial', 30))
+in_time_label_exit_tab = ttk.Label(exit_tab, text="Entrada: ", font=('Arial', 25))
+in_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=in_time, font=('Arial', 30))
+out_time_label_exit_tab = ttk.Label(exit_tab, text="Saída: ", font=('Arial', 25))
+out_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_time, font=('Arial', 30))
+delta_time_label_exit_tab = ttk.Label(exit_tab, text="Permanência: ", font=('Arial', 25))
+delta_time_value_label_exit_tab = ttk.Label(exit_tab, textvariable=delta_time, font=('Arial', 25))
 total_label_exit_tab = ttk.Label(exit_tab, text="Total R$ ", font=font45)
 total_value_label_exit_tab = ttk.Label(exit_tab, textvariable=total_value, font=('Arial', 100, 'bold'))
 total_received_label_exit_tab = ttk.Label(exit_tab, text="Valor recebido:", font=font20)
@@ -1681,7 +1712,7 @@ report_resp_entry.bind("<KP_Enter>", lambda event: calc_report_metrics(event, re
 report_tab_frame.bind_all("<KeyPress-d>", set_checkbox_cash)
 
 if __name__ == "__main__":
-    open_printer_connection()
+    printer_status.set(open_printer_connection())
     global df_in, df_out
     df_in = get_today_parkings_as_df_in()
     df_out = get_today_parkings_as_df_out()
@@ -1689,4 +1720,3 @@ if __name__ == "__main__":
     mount_out_table()
     # login_modal.destroy()
     root.mainloop()
-    

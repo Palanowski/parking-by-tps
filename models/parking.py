@@ -162,7 +162,7 @@ def cancel_parking(plateID, userID):
         db(
             (db.parking.plate == plateID)
             & (db.parking.entry_date==datetime.now().date())
-        ).update(exit_time=datetime.now().time(), status="CANCELADO", exit_user=userID)
+        ).update(exit_time=datetime.now().time(), status="DESISTÊNCIA", exit_user=userID, total_value=0, addition=0, discount=0)
 
 
 def return_parking(plateID):

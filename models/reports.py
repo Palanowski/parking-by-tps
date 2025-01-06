@@ -57,7 +57,7 @@ def calc_metrics(parkings: list):
     finalized_vehicles_cat_2 = [parking for parking in finalized_vehicles if parking["category"]=="2-SUV"]
     finalized_vehicles_cat_3 = [parking for parking in finalized_vehicles if parking["category"]=="3-MOTO"]
     finalized_vehicles_cat_4 = [parking for parking in finalized_vehicles if parking["category"]=="4-CAMINHONETE"]
-    canceled_vehicles = [parking for parking in parkings if parking["status"]=="CANCELADO"]
+    canceled_vehicles = [parking for parking in parkings if parking["status"]=="DESISTÊNCIA"]
     canceled_vehicles_cat_1 = [parking for parking in canceled_vehicles if parking["category"]=="1-CARRO"]
     canceled_vehicles_cat_2 = [parking for parking in canceled_vehicles if parking["category"]=="2-SUV"]
     canceled_vehicles_cat_3 = [parking for parking in canceled_vehicles if parking["category"]=="3-MOTO"]
