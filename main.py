@@ -843,7 +843,7 @@ def export_parking_to_csv():
             )
             report.append(line)
         report_df = pd.DataFrame(report)
-        report_df.to_csv(f"./relatorio_{date}.csv", header=True)
+        report_df.to_csv(f"/home/estacionamento/Documentos/relatorio_{date}.csv", header=True)
         open(f'/home/estacionamento/Documentos/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
         mb.showinfo("SUCESSO", "Planilhas exportadas com sucesso na pasta Documentos.")
 
