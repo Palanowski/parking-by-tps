@@ -400,23 +400,26 @@ def insert_parking(event):
         in_plate.set("")
         in_plate_entry.focus()
     else:
-        parking_model = ParkingModel(
-            plate=current_plate,
-            barcode=hash_generator(),
-            model=in_model.get(),
-            category=in_category.get(),
-            color=in_color.get(),
-            status="EM ABERTO",
-            entry_user=active_user_name.get()
-        )
-        post_parking(parking_model)
-        calc_total_count()
-        print_parking(parking_model.barcode)
-        clear_data("in")
-        update_in_grid()
-        update_out_grid()
-        update_completion_list("plate")
-        in_plate_entry.focus()
+        if not get_parking_by_plate(current_plate):
+            parking_model = ParkingModel(
+                plate=current_plate,
+                barcode=hash_generator(),
+                model=in_model.get(),
+                category=in_category.get(),
+                color=in_color.get(),
+                status="EM ABERTO",
+                entry_user=active_user_name.get()
+            )
+            post_parking(parking_model)
+            calc_total_count()
+            print_parking(parking_model.barcode)
+            clear_data("in")
+            update_in_grid()
+            update_out_grid()
+            update_completion_list("plate")
+            in_plate_entry.focus()
+        else:
+            mb.showwarning("ALERTA", "Esta placa já existe")
 
 
 def ending_parking(event, status):
@@ -507,10 +510,10 @@ def mount_in_table():
             bg_tag = "green"
         elif values[7] == "FINALIZADO":
             bg_tag = "gray"
-            out_table.insert("", 0, values=values, tags=bg_tag)
+            #out_table.insert("", 0, values=values, tags=bg_tag)
         elif values[7] == "DESISTÊNCIA":
             bg_tag = "red"
-            out_table.insert("", 0, values=values, tags=bg_tag)
+            #out_table.insert("", 0, values=values, tags=bg_tag)
         in_table.insert("", 0, values=values, tags=bg_tag)
 
 
@@ -1009,6 +1012,7 @@ in_model_entry = AutocompleteCombobox(
     textvariable=in_model,
     width=18,
 )
+in_model_entry.autocomplete(1)
 in_category_entry = AutocompleteCombobox(
     in_frame_center,
     font=font20,
