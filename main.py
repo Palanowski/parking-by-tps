@@ -996,8 +996,8 @@ printer_name_label = ttk.Label(printer_frame, text="Impressora:", font=font13)
 printer_name_label.pack(side=LEFT)
 printer_button = Button(
     printer_frame,
-    text="Testar conexão",
-    font=('Arial', 8, 'bold'),
+    text="TESTAR CONEXÃO",
+    font=('Arial', 6, 'bold'),
     command= reconnect_printer,
     bg="royalblue",
     fg="white",
@@ -1616,7 +1616,7 @@ add_config_button = Button(
 # -----------------------------------------------------------------------------------------------------------
 # CONFIG TAB LAYOUT
 # -----------------------------------------------------------------------------------------------------------
-add_model_frame.place(x=20, y=20, height=200, width=400)
+add_model_frame.place(x=20, y=10, height=200, width=400)
 add_model_title.place(relx=0.5, y=15, anchor=CENTER)
 add_model_name.place(x=30, y=35, anchor=NW)
 add_model_entry.place(x=370, y=34, anchor=NE)
@@ -1625,7 +1625,7 @@ add_model_category_entry.place(x=370, y=89, anchor=NE)
 add_model_button.place(x=370, y=150, anchor=NE)
 rmv_model_button.place(x=30, y=150, anchor=NW)
 
-add_category_frame.place(x=20, y=250, height=250, width=400)
+add_category_frame.place(x=20, y=220, height=250, width=400)
 add_category_title.place(relx=0.5, y=15, anchor=CENTER)
 add_category_name.place(x=30, y=45, anchor=NW)
 add_category_name_entry.place(x=370, y=44, anchor=NE)
@@ -1636,32 +1636,32 @@ add_category_daily_price_entry.place(x=370, y=129, anchor=NE)
 add_category_button.place(x=370, y=180, anchor=NE)
 rmv_category_button.place(x=30, y=180, anchor=NW)
 
-add_color_frame.place(x=20, y=530, height=180, width=400)
+add_color_frame.place(x=20, y=480, height=180, width=400)
 add_color_title.place(relx=0.5, y=15, anchor=CENTER)
 add_color_name.place(x=30, y=45, anchor=NW)
 add_color_name_entry.place(x=370, y=44, anchor=NE)
 add_color_button.place(x=370, y=100, anchor=NE)
 rmv_color_button.place(x=30, y=100, anchor=NW)
 
-add_user_frame.place(x=450, y=20, height=230, width=400)
+add_user_frame.place(x=450, y=10, height=200, width=400)
 add_user_title.place(relx=0.5, y=15, anchor=CENTER)
-add_user_name.place(x=30, y=45, anchor=NW)
-add_user_name_entry.place(x=370, y=44, anchor=NE)
-add_user_pass.place(x=30, y=90, anchor=NW)
-add_user_pass_entry.place(x=370, y=89, anchor=NE)
-add_user_role.place(x=30, y=135, anchor=NW)
-add_user_role_entry.place(x=370, y=134, anchor=NE)
-rmv_user_button.place(x=30, y=180, anchor=NW)
-add_user_button.place(x=370, y=180, anchor=NE)
+add_user_name.place(x=30, y=35, anchor=NW)
+add_user_name_entry.place(x=370, y=34, anchor=NE)
+add_user_pass.place(x=30, y=75, anchor=NW)
+add_user_pass_entry.place(x=370, y=74, anchor=NE)
+add_user_role.place(x=30, y=115, anchor=NW)
+add_user_role_entry.place(x=370, y=114, anchor=NE)
+rmv_user_button.place(x=30, y=150, anchor=NW)
+add_user_button.place(x=370, y=150, anchor=NE)
 
-add_status_frame.place(x=450, y=265, height=120, width=400)
+add_status_frame.place(x=450, y=220, height=130, width=400)
 add_status_title.place(relx=0.5, y=15, anchor=CENTER)
-add_status_name.place(x=30, y=41, anchor=NW)
-add_status_name_entry.place(x=370, y=40, anchor=NE)
+add_status_name.place(x=30, y=45, anchor=NW)
+add_status_name_entry.place(x=370, y=44, anchor=NE)
 add_status_button.place(x=370, y=80, anchor=NE)
 rmv_status_button.place(x=30, y=80, anchor=NW)
 
-upd_vehicle_frame.place(x=450, y=400, height=215, width=400)
+upd_vehicle_frame.place(x=450, y=360, height=215, width=400)
 upd_vehicle_title.place(relx=0.5, y=15, anchor=CENTER)
 upd_vehicle_plate_label.place(x=30, y=41, anchor=NW)
 upd_vehicle_plate_entry.place(x=370, y=40, anchor=NE)
@@ -1674,23 +1674,23 @@ upd_vehicle_color_entry.place(x=370, y=130, anchor=NE)
 upd_vehicle_button.place(x=370, y=165, anchor=NE)
 del_vehicle_button.place(x=30, y=165, anchor=NW)
 
-add_clear_frame.place(x=450, y=630, height=80, width=400)
+add_clear_frame.place(x=450, y=582, height=78, width=400)
 add_clear_title.place(relx=0.5, y=15, anchor=CENTER)
 add_clear_button.place(relx=0.5, y=50, anchor=CENTER)
 
-add_config_frame.place(x=880, y=20, height=690, width=420)
+add_config_frame.place(x=880, y=10, height=650, width=420)
 add_config_title.place(relx=0.5, y=15, anchor=CENTER)
 add_config_tolerance.place(x=30, y=45, anchor=NW)
 config_from_db = get_config()
 new_tolerance.set(config_from_db["tolerance"])
 add_config_tolerance_entry.place(x=390, y=44, anchor=NE)
-add_config_header.place(relx=0.5, y=120, anchor=CENTER)
+add_config_header.place(relx=0.5, y=100, anchor=CENTER)
 add_config_header_value.insert(1.0, chars=config_from_db["printer_header"])
-add_config_header_value.place(x=30, y=140, anchor=NW)
-add_config_footer.place(relx=0.5, y=370, anchor=CENTER)
+add_config_header_value.place(x=30, y=120, anchor=NW)
+add_config_footer.place(relx=0.5, y=350, anchor=CENTER)
 add_config_footer_value.insert(1.0, chars=config_from_db["printer_footer"])
-add_config_footer_value.place(x=30, y=390, anchor=NW)
-add_config_button.place(relx=0.5, y=635, anchor=CENTER)
+add_config_footer_value.place(x=30, y=370, anchor=NW)
+add_config_button.place(relx=0.5, y=615, anchor=CENTER)
 
 # -----------------------------------------------------------------------------------------------------------
 # CONFIG TAB COMMANDS
