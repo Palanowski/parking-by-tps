@@ -91,3 +91,13 @@ def define_tables(db):
         Field("logout_date", "datetime", default=None),
         primarykey=["id"],
     )
+
+    db.define_table(
+        "vehicles",
+        Field("id", "integer", notnull=True),
+        Field("plate", "string", length=45, notnull=True),
+        Field("color", "reference color.id"),
+        Field("category", "reference category.id"),
+        Field("model", "reference model.id"),
+        primarykey=["id"],
+    )

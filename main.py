@@ -6,6 +6,7 @@ import tkinter.ttk as ttk
 from tkinter import *
 from tkinter.constants import *
 from tkinter import messagebox as mb
+from tkinter.simpledialog import askinteger
 from ttkwidgets.autocomplete import AutocompleteCombobox
 
 from models.color import *
@@ -17,11 +18,13 @@ from models.reports import calc_metrics
 from models.status import *
 from models.users import *
 from models.impressora import *
+from models.vehicles import *
 
 from schemas.category import CategoryModel
 from schemas.model import ModelModel
 from schemas.parking import ParkingModel
 from schemas.users import UsersModel
+from schemas.vehicles import VehicleModel
 
 
 # CONFIG
@@ -61,6 +64,12 @@ new_category_daily_price = StringVar()
 new_color_name = StringVar()
 
 new_status = StringVar()
+
+upd_vehicle_plate = StringVar()
+upd_vehicle_model = StringVar()
+upd_vehicle_category = StringVar()
+upd_vehicle_color = StringVar()
+
 
 new_tolerance = IntVar()
 new_header = StringVar()
@@ -172,9 +181,12 @@ def update_completion_list(element):
         users = get_all_users()
         login_entry.configure(values=users)
         add_user_name_entry.configure(values=users)
-    elif "plate":
+    elif "plate" in element:
         plates = get_parkings_plates()
         out_plate_entry.configure(values=plates)
+    elif "vehicle" in element:
+        plates = get_all_vehicles()
+        upd_vehicle_plate_entry.configure(values=plates)
 
 
 def calc_total_count():
@@ -393,6 +405,39 @@ def hash_generator():
     return code
 
 
+def check_vehicle(event, cfg=False):
+    if cfg:
+        current_plate = upd_vehicle_plate.get()
+    else:
+        current_plate = in_plate.get()
+    vehicle = get_vehicle_by_plate(current_plate)
+    if len(vehicle)>1:
+        models_list = list()
+        for index in range(len(vehicle)):
+            models_list.append(f'{index} - {vehicle[index]["model"]}, {vehicle[index]["color"]}')
+        choice = askinteger(title="Escolha o modelo desejado", prompt="\n".join(models_list))
+        vehicle = vehicle[choice]
+        if cfg:
+            upd_vehicle_model.set(vehicle["model"])
+            upd_vehicle_category.set(vehicle["category"])
+            upd_vehicle_color.set(vehicle["color"])
+        else:
+            in_model.set(vehicle["model"])
+            in_category.set(vehicle["category"])
+            in_color.set(vehicle["color"])
+    if vehicle and (len(vehicle)==1):
+        vehicle = vehicle[0]
+        if cfg:
+            upd_vehicle_model.set(vehicle["model"])
+            upd_vehicle_category.set(vehicle["category"])
+            upd_vehicle_color.set(vehicle["color"])
+        else:
+            in_model.set(vehicle["model"])
+            in_category.set(vehicle["category"])
+            in_color.set(vehicle["color"])
+    return True if vehicle else False
+
+
 def insert_parking(event):
     current_plate = in_plate.get()
     if not current_plate:
@@ -413,6 +458,13 @@ def insert_parking(event):
             post_parking(parking_model)
             calc_total_count()
             print_parking(parking_model.barcode)
+            vehicleModel = VehicleModel(
+                plate=current_plate,
+                model=in_model.get(),
+                category=in_category.get(),
+                color=in_color.get(),
+            )
+            create_vehicle(vehicleModel)
             clear_data("in")
             update_in_grid()
             update_out_grid()
@@ -565,7 +617,11 @@ def check_element(event, element):
             in_plate_entry.focus()
             return
         if check_plate(plateID):
-            in_model_entry.focus()
+            cheched = check_vehicle(plateID)
+            if cheched:
+                in_confirm_button.focus()
+            else:
+                in_model_entry.focus()
         else:
             mb.showwarning("ALERTA", "Esta placa já existe")
             in_plate.set("")
@@ -764,6 +820,14 @@ def add_element(element: str):
             update_config(tolerance=new_tolerance.get(), header=new_header.get(), footer=new_footer.get())
             update_completion_list("config")
             mb.showwarning("SUCESSO", "Configurações gerais atualizadas com sucesso.")
+        elif "vehicle" in element:
+            update_vehicle(VehicleModel(
+                plate=upd_vehicle_plate.get(),
+                model=upd_vehicle_model.get(),
+                category=upd_vehicle_category.get(),
+                color=upd_vehicle_color.get(),
+            ))
+            mb.showwarning("SUCESSO", "Veículo atualizado com sucesso.")
     elif "RMV" in element:
         if "model" in element:
             delete_model(new_model_name.get())
@@ -785,6 +849,10 @@ def add_element(element: str):
             delete_status(new_status.get())
             update_completion_list("status")
             mb.showwarning("SUCESSO", f"Status {new_status.get()} removido com sucesso.")
+        elif "vehicle" in element:
+            delete_vehicle(upd_vehicle_plate.get(), upd_vehicle_model.get())
+            update_completion_list("vehicle")
+            mb.showwarning("SUCESSO", "Veículo removido com sucesso.")
 
 
 def calc_report_metrics(event, userID: str):
@@ -1489,6 +1557,42 @@ add_clear_button = Button(
     width=12,
     cursor="hand2"
 )
+
+upd_vehicle_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
+upd_vehicle_title = ttk.Label(upd_vehicle_frame, text="VEÍCULOS SALVOS", justify="center", font=font14)
+upd_vehicle_plate_label = ttk.Label(upd_vehicle_frame, text="PLACA:", justify="center", font=font14)
+upd_vehicle_plate_entry = AutocompleteCombobox(upd_vehicle_frame, width=18, font=font14, textvariable=upd_vehicle_plate, completevalues=get_all_vehicles())
+upd_vehicle_model_label = ttk.Label(upd_vehicle_frame, text="MODELO:", justify="center", font=font14)
+upd_vehicle_model_entry = AutocompleteCombobox(upd_vehicle_frame, width=18, font=font14, textvariable=upd_vehicle_model, completevalues=get_all_models())
+upd_vehicle_category_label = ttk.Label(upd_vehicle_frame, text="CATEGORIA:", justify="center", font=font14)
+upd_vehicle_category_entry = AutocompleteCombobox(upd_vehicle_frame, width=18, font=font14, textvariable=upd_vehicle_category, completevalues=get_all_categories())
+upd_vehicle_color_label = ttk.Label(upd_vehicle_frame, text="COR:", justify="center", font=font14)
+upd_vehicle_color_entry = AutocompleteCombobox(upd_vehicle_frame, width=18, font=font14, textvariable=upd_vehicle_color, completevalues=get_all_colors())
+upd_vehicle_button = Button(
+    upd_vehicle_frame,
+    text="Atualizar",
+    command=lambda element="ADD vehicle": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+del_vehicle_button = Button(
+    upd_vehicle_frame,
+    text="Remover",
+    command=lambda element="RMV vehicle": add_element(element=element),
+    font=font14,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+    width=12,
+    cursor="hand2"
+)
+
 add_config_frame = ttk.Frame(config_tab, borderwidth=2, relief="sunken")
 add_config_title = ttk.Label(add_config_frame, text="CONFIGURAÇÕES GERAIS", justify="center", font=font14)
 add_config_tolerance = ttk.Label(add_config_frame, text="TOLERÂNCIA EM MINUTOS:", justify="center", font=font14)
@@ -1539,7 +1643,7 @@ add_color_name_entry.place(x=370, y=44, anchor=NE)
 add_color_button.place(x=370, y=100, anchor=NE)
 rmv_color_button.place(x=30, y=100, anchor=NW)
 
-add_user_frame.place(x=450, y=20, height=250, width=400)
+add_user_frame.place(x=450, y=20, height=230, width=400)
 add_user_title.place(relx=0.5, y=15, anchor=CENTER)
 add_user_name.place(x=30, y=45, anchor=NW)
 add_user_name_entry.place(x=370, y=44, anchor=NE)
@@ -1550,16 +1654,29 @@ add_user_role_entry.place(x=370, y=134, anchor=NE)
 rmv_user_button.place(x=30, y=180, anchor=NW)
 add_user_button.place(x=370, y=180, anchor=NE)
 
-add_status_frame.place(x=450, y=320, height=180, width=400)
+add_status_frame.place(x=450, y=265, height=120, width=400)
 add_status_title.place(relx=0.5, y=15, anchor=CENTER)
-add_status_name.place(x=30, y=45, anchor=NW)
-add_status_name_entry.place(x=370, y=44, anchor=NE)
-add_status_button.place(x=370, y=100, anchor=NE)
-rmv_status_button.place(x=30, y=100, anchor=NW)
+add_status_name.place(x=30, y=41, anchor=NW)
+add_status_name_entry.place(x=370, y=40, anchor=NE)
+add_status_button.place(x=370, y=80, anchor=NE)
+rmv_status_button.place(x=30, y=80, anchor=NW)
 
-add_clear_frame.place(x=450, y=530, height=100, width=400)
+upd_vehicle_frame.place(x=450, y=400, height=215, width=400)
+upd_vehicle_title.place(relx=0.5, y=15, anchor=CENTER)
+upd_vehicle_plate_label.place(x=30, y=41, anchor=NW)
+upd_vehicle_plate_entry.place(x=370, y=40, anchor=NE)
+upd_vehicle_model_label.place(x=30, y=71, anchor=NW)
+upd_vehicle_model_entry.place(x=370, y=70, anchor=NE)
+upd_vehicle_category_label.place(x=30, y=101, anchor=NW)
+upd_vehicle_category_entry.place(x=370, y=100, anchor=NE)
+upd_vehicle_color_label.place(x=30, y=131, anchor=NW)
+upd_vehicle_color_entry.place(x=370, y=130, anchor=NE)
+upd_vehicle_button.place(x=370, y=165, anchor=NE)
+del_vehicle_button.place(x=30, y=165, anchor=NW)
+
+add_clear_frame.place(x=450, y=630, height=80, width=400)
 add_clear_title.place(relx=0.5, y=15, anchor=CENTER)
-add_clear_button.place(relx=0.5, y=60, anchor=CENTER)
+add_clear_button.place(relx=0.5, y=50, anchor=CENTER)
 
 add_config_frame.place(x=880, y=20, height=690, width=420)
 add_config_title.place(relx=0.5, y=15, anchor=CENTER)
@@ -1592,6 +1709,10 @@ add_user_name_entry.bind("<<ComboboxSelected>>", lambda event: check_config_elem
 add_user_name_entry.bind("<Return>", lambda event: check_config_element(event, "user"))
 add_user_name_entry.bind("<Tab>", lambda event: check_config_element(event, "user"))
 add_user_name_entry.bind("<KP_Enter>", lambda event: check_config_element(event, "user"))
+
+upd_vehicle_plate_entry.bind("<Return>", lambda event: check_vehicle(event, True))
+upd_vehicle_plate_entry.bind("<Tab>", lambda event: check_vehicle(event, True))
+upd_vehicle_plate_entry.bind("<KP_Enter>", lambda event: check_vehicle(event, True))
 
 # -----------------------------------------------------------------------------------------------------------
 # REPORT TAB WIDGETS
