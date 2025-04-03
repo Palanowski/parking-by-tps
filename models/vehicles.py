@@ -24,6 +24,15 @@ def get_vehicle_by_plate(vehicle_plate):
     return vehicle.as_list() if vehicle else False
 
 
+def get_vehicle_by_model_and_plate(vehicle_plate, vehicle_model):
+    with get_dal_mysql() as db:
+        vehicle = db(
+            (db.vehicles.plate==vehicle_plate)
+            & (db.vehicles.model==vehicle_model)
+        ).select().first()
+    return vehicle.as_dict() if vehicle else False
+
+
 def create_vehicle(vehicleModel: VehicleModel):
     with get_dal_mysql() as db:
         vehicle = db(

@@ -4,6 +4,7 @@ from tkinter import messagebox as mb
 from datetime import datetime
 from db.dal_connect import get_dal_mysql
 from schemas.parking import ParkingModel
+from models.vehicles import get_vehicle_by_plate
 
 def check_plate(plateID):
     with get_dal_mysql() as db:
@@ -11,6 +12,10 @@ def check_plate(plateID):
             (db.parking.plate == plateID)
             & (db.parking.entry_date == datetime.now().date())
             ).select().first()
+        if park:
+            vehicles = get_vehicle_by_plate(plateID)
+            if len(vehicles)>1:
+                teste = 1
     return False if park else True
 
 

@@ -411,21 +411,22 @@ def check_vehicle(event, cfg=False):
     else:
         current_plate = in_plate.get()
     vehicle = get_vehicle_by_plate(current_plate)
-    if len(vehicle)>1:
-        models_list = list()
-        for index in range(len(vehicle)):
-            models_list.append(f'{index} - {vehicle[index]["model"]}, {vehicle[index]["color"]}')
-        choice = askinteger(title="Escolha o modelo desejado", prompt="\n".join(models_list))
-        vehicle = vehicle[choice]
+    if vehicle and len(vehicle)>1:
+        models_list = [model["model"] for model in vehicle]
+        in_model_entry.configure(values=models_list)
+        in_model.set(models_list[0])
+        in_model_entry.event_generate('<Down>')
         if cfg:
+            models_list = list()
+            for index in range(len(vehicle)):
+                models_list.append(f'{index} - {vehicle[index]["model"]}, {vehicle[index]["color"]}')
+            choice = askinteger(title="Escolha o modelo desejado", prompt="\n".join(models_list))
+            vehicle = vehicle[choice]
             upd_vehicle_model.set(vehicle["model"])
             upd_vehicle_category.set(vehicle["category"])
             upd_vehicle_color.set(vehicle["color"])
-        else:
-            in_model.set(vehicle["model"])
-            in_category.set(vehicle["category"])
-            in_color.set(vehicle["color"])
     if vehicle and (len(vehicle)==1):
+        update_completion_list("model")
         vehicle = vehicle[0]
         if cfg:
             upd_vehicle_model.set(vehicle["model"])
@@ -469,6 +470,7 @@ def insert_parking(event):
             update_in_grid()
             update_out_grid()
             update_completion_list("plate")
+            update_completion_list("model")
             in_plate_entry.focus()
         else:
             mb.showwarning("ALERTA", "Esta placa já existe")
@@ -603,12 +605,18 @@ def check_element(event, element):
             mb.showwarning("ALERTA", "Categoria não encontrada")
     elif element == "model":
         modelID = in_model.get()
-        modelDB = check_model(modelID)
-        if modelDB:
-            in_category.set(modelDB.category)
-            in_color_entry.focus()
+        vehicle = get_vehicle_by_model_and_plate(in_plate.get(), modelID)
+        if vehicle:
+            in_category.set(vehicle["category"])
+            in_color.set(vehicle["color"])
+            enter_ent_button_focus(event)
         else:
-            mb.showwarning("ALERTA", "Modelo não encontrado")
+            modelDB = check_model(modelID)
+            if modelDB:
+                in_category.set(modelDB.category)
+                in_color_entry.focus()
+            else:
+                mb.showwarning("ALERTA", "Modelo não encontrado")
     elif element == "in plate":
         plateID = in_plate.get().lower()
         in_plate.set(re.sub('[\W_]+', '', plateID))
@@ -617,8 +625,8 @@ def check_element(event, element):
             in_plate_entry.focus()
             return
         if check_plate(plateID):
-            cheched = check_vehicle(plateID)
-            if cheched:
+            checked = check_vehicle(plateID)
+            if checked:
                 in_confirm_button.focus()
             else:
                 in_model_entry.focus()
