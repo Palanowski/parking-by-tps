@@ -161,7 +161,7 @@ font18 = ('Arial', 18, 'bold')
 font20 = ('Arial', 20, 'bold')
 font45 = ('Arial', 45, 'bold')
 
-eye_image = ImageTk.PhotoImage(file="eye.png")
+eye_image = ImageTk.PhotoImage(file="/home/estacionamento/Documentos/parking-by-tps/eye.png")
 
 show = BooleanVar(value=False)
 
@@ -975,6 +975,9 @@ def hide_and_show():
         show.set(True)
 
 
+def send_report_by_email():
+    export_parking_to_csv()
+    send_email(datetime.now().strftime("%Y_%m_%d"))
 # def open_login_modal(tab):
 #     login_modal = Toplevel()
 #     login_modal.protocol("WM_DELETE_WINDOW", go_to_parking_tab)
@@ -1053,6 +1056,19 @@ printer_button = Button(
     activeforeground="black",
 )
 printer_button.pack(side=LEFT)
+send_report_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
+send_report_frame.place(relx=0.6, y=0, anchor=NE)
+send_report_button = Button(
+    send_report_frame,
+    text="ENVIAR RELATÓRIO",
+    font=('Arial', 6, 'bold'),
+    command= send_report_by_email,
+    bg="royalblue",
+    fg="white",
+    activebackground="coral1",
+    activeforeground="black",
+)
+send_report_button.pack(side=LEFT)
 
 root_notebook.bind('<<NotebookTabChanged>>', on_tab_change)
 

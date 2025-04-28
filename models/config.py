@@ -1,5 +1,8 @@
 import os
 import smtplib
+from os.path import basename
+from datetime import date
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from db.dal_connect import get_dal_mysql
@@ -29,7 +32,7 @@ def update_config(tolerance: int = None, header: str = None, footer: str = None)
             db(db.config.id==1).update(printer_footer=footer)
     return True
 
-def send_email(from_email, to_email, subject, body):
+def send_email(date):
     """
     This function sends an email using the specified parameters.
 
@@ -43,10 +46,16 @@ def send_email(from_email, to_email, subject, body):
         None
     """
     msg = MIMEMultipart()
-    msg["From"] = from_email
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
+    msg["From"] = FROMEMAIL
+    msg["To"] = TOEMAIL
+    msg["Subject"] = f"Relatório {date}"
+    msg.attach(MIMEText(f"Relatório em anexo referente ao dia {date}", "plain"))
+
+    file_path = f"/home/estacionamento/Documentos/relatorio_{date}.csv"
+    with open(file_path, "rb") as file:
+        part = MIMEApplication(file.read(), Name=basename(file_path))
+        part['Content-Disposition'] = 'attachment; filename="%s"' % basename(file_path)
+        msg.attach(part)
 
     try:
         server = smtplib.SMTP(SMTPSERVER, SMTPPORT)
@@ -54,7 +63,7 @@ def send_email(from_email, to_email, subject, body):
         server.login(SMTPUSER, SMTPPASSWORD)
 
         text = msg.as_string()
-        server.sendmail(from_email, to_email, text)
+        server.sendmail(FROMEMAIL, TOEMAIL, text)
     except Exception as e:
         print(f"- Failed to send email: {e}")
     finally:
