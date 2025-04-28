@@ -8,6 +8,7 @@ from tkinter.constants import *
 from tkinter import messagebox as mb
 from tkinter.simpledialog import askinteger
 from ttkwidgets.autocomplete import AutocompleteCombobox
+from PIL import ImageTk
 
 from models.color import *
 from models.category import *
@@ -159,6 +160,10 @@ font14 = ('Arial', 14, 'bold')
 font18 = ('Arial', 18, 'bold')
 font20 = ('Arial', 20, 'bold')
 font45 = ('Arial', 45, 'bold')
+
+eye_image = ImageTk.PhotoImage(file="eye.png")
+
+show = BooleanVar(value=False)
 
 # AUXILIARY FUNCTIONS
 def update_completion_list(element):
@@ -933,6 +938,41 @@ def set_checkbox_cash(event):
         byCashVar.set(False)
     else:
         byCashVar.set(True)
+
+
+def hide_and_show():
+    if show.get():
+        report_total_cash_value.place_forget()
+        report_total_card_value.place_forget()
+        report_total_cashier_value.place_forget()
+        report_total_value.place_forget()
+        report_open_total_value.place_forget()
+        report_finalized_total_value.place_forget()
+        report_canceled_total_value.place_forget()
+        report_total_cash_value_hide.place(x=300, y=460, anchor=CENTER)
+        report_total_card_value_hide.place(x=300, y=500, anchor=CENTER)
+        report_total_cashier_value_hide.place(x=300, y=540, anchor=CENTER)
+        report_total_value_hide.place(x=580, y=80, anchor=CENTER)
+        report_open_total_value_hide.place(x=300, y=380, anchor=CENTER)
+        report_finalized_total_value_hide.place(x=580, y=380, anchor=CENTER)
+        report_canceled_total_value_hide.place(x=880, y=380, anchor=CENTER)
+        show.set(False)
+    else:
+        report_total_cash_value.place(x=300, y=460, anchor=CENTER)
+        report_total_card_value.place(x=300, y=500, anchor=CENTER)
+        report_total_cashier_value.place(x=300, y=540, anchor=CENTER)
+        report_total_value.place(x=580, y=80, anchor=CENTER)
+        report_open_total_value.place(x=300, y=380, anchor=CENTER)
+        report_finalized_total_value.place(x=580, y=380, anchor=CENTER)
+        report_canceled_total_value.place(x=880, y=380, anchor=CENTER)
+        report_total_cash_value_hide.place_forget()
+        report_total_card_value_hide.place_forget()
+        report_total_cashier_value_hide.place_forget()
+        report_total_value_hide.place_forget()
+        report_open_total_value_hide.place_forget()
+        report_finalized_total_value_hide.place_forget()
+        report_canceled_total_value_hide.place_forget()
+        show.set(True)
 
 
 # def open_login_modal(tab):
@@ -1728,6 +1768,7 @@ upd_vehicle_plate_entry.bind("<KP_Enter>", lambda event: check_vehicle(event, Tr
 report_tab_frame = ttk.Frame(report_tab, borderwidth=2, relief="sunken")
 report_total_name = ttk.Label(report_tab_frame, text="Total de veículos:", font=font14)
 report_total_value = ttk.Label(report_tab_frame, textvariable=report_total_vehicles, font=font14, borderwidth=3, relief="ridge", width=15, anchor=CENTER)
+report_total_value_hide = ttk.Label(report_tab_frame, text="*****", font=font14, borderwidth=3, relief="ridge", width=15, anchor=CENTER)
 report_resp_name = ttk.Label(report_tab_frame, text="Responsável:", font=font14)
 report_resp_entry = AutocompleteCombobox(report_tab_frame, width=15, font=font14, textvariable=report_resp_var, completevalues=get_users_from_parking())
 report_open_veh_title = ttk.Label(report_tab_frame, text="Veículos em aberto:", font=font14)
@@ -1741,10 +1782,13 @@ report_veh_total = ttk.Label(report_tab_frame, text="TOTAL:", font=font14)
 report_total_cash_title = ttk.Label(report_tab_frame, text="Total caixa:", font=font14)
 report_total_cash_name = ttk.Label(report_tab_frame, text="Dinheiro:", font=font14)
 report_total_cash_value = ttk.Label(report_tab_frame, textvariable=report_total_cash, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_total_cash_value_hide = ttk.Label(report_tab_frame, text="*****",font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_total_card_name = ttk.Label(report_tab_frame, text="Cartão:", font=font14)
 report_total_card_value = ttk.Label(report_tab_frame, textvariable=report_total_card, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_total_card_value_hide = ttk.Label(report_tab_frame, text="*****", font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_total_cashier_name = ttk.Label(report_tab_frame, text="Total:", font=font14)
 report_total_cashier_value = ttk.Label(report_tab_frame, textvariable=report_total_cashier, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_total_cashier_value_hide = ttk.Label(report_tab_frame, text="*****", font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_total_add_name = ttk.Label(report_tab_frame, text="Acréscimos:", font=font14)
 report_total_add_value = ttk.Label(report_tab_frame, textvariable=report_total_add, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_total_disc_name = ttk.Label(report_tab_frame, text="Descontos:", font=font14)
@@ -1755,16 +1799,19 @@ report_open_value_3 = ttk.Label(report_tab_frame, textvariable=report_total_open
 report_open_value_4 = ttk.Label(report_tab_frame, textvariable=report_total_open_vehicles_4, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_separator = ttk.Separator(report_tab_frame)
 report_open_total_value = ttk.Label(report_tab_frame, textvariable=report_total_open_vehicles, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_open_total_value_hide = ttk.Label(report_tab_frame, text="*****", font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_finalized_value_1 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_1, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_finalized_value_2 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_2, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_finalized_value_3 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_3, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_finalized_value_4 = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles_4, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_finalized_total_value = ttk.Label(report_tab_frame, textvariable=report_total_finalized_vehicles, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_finalized_total_value_hide = ttk.Label(report_tab_frame, text="*****", font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_canceled_value_1 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_1, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_canceled_value_2 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_2, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_canceled_value_3 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_3, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_canceled_value_4 = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles_4, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_canceled_total_value = ttk.Label(report_tab_frame, textvariable=report_total_canceled_vehicles, font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
+report_canceled_total_value_hide = ttk.Label(report_tab_frame, text="*****", font=font14, borderwidth=3, relief="groove", width=15, anchor=CENTER)
 report_print_button = Button(
     report_tab_frame,
     text="Imprimir",
@@ -1789,12 +1836,17 @@ report_export_button = Button(
     width=12,
     cursor="hand2"
 )
+report_hide_show_button = Button(
+    report_tab_frame,
+    image=eye_image,
+    command=hide_and_show,
+)
 # -----------------------------------------------------------------------------------------------------------
 # REPORT TAB LAYOUT
 # -----------------------------------------------------------------------------------------------------------
 report_tab_frame.place(x=20, y=20, anchor=NW, height=690, width=1260)
 report_total_name.place(x=580, y=50, anchor=CENTER)
-report_total_value.place(x=580, y=80, anchor=CENTER)
+report_total_value_hide.place(x=580, y=80, anchor=CENTER)
 report_resp_name.place(x=880, y=50, anchor=CENTER)
 report_resp_entry.place(x=880, y=80, anchor=CENTER)
 report_open_veh_title.place(x=300, y=150, anchor=CENTER)
@@ -1808,11 +1860,11 @@ report_separator.place(x=100, y=355, width=900)
 report_veh_total.place(x=190, y=370, anchor=NE)
 report_total_cash_title.place(x=300, y=420, anchor=CENTER)
 report_total_cash_name.place(x=190, y=450, anchor=NE)
-report_total_cash_value.place(x=300, y=460, anchor=CENTER)
+report_total_cash_value_hide.place(x=300, y=460, anchor=CENTER)
 report_total_card_name.place(x=190, y=490, anchor=NE)
-report_total_card_value.place(x=300, y=500, anchor=CENTER)
+report_total_card_value_hide.place(x=300, y=500, anchor=CENTER)
 report_total_cashier_name.place(x=190, y=530, anchor=NE)
-report_total_cashier_value.place(x=300, y=540, anchor=CENTER)
+report_total_cashier_value_hide.place(x=300, y=540, anchor=CENTER)
 report_total_add_name.place(x=580, y=420, anchor=CENTER)
 report_total_add_value.place(x=580, y=460, anchor=CENTER)
 report_total_disc_name.place(x=880, y=420, anchor=CENTER)
@@ -1821,19 +1873,20 @@ report_open_value_1.place(x=300, y=210, anchor=CENTER)
 report_open_value_2.place(x=300, y=250, anchor=CENTER)
 report_open_value_3.place(x=300, y=290, anchor=CENTER)
 report_open_value_4.place(x=300, y=330, anchor=CENTER)
-report_open_total_value.place(x=300, y=380, anchor=CENTER)
+report_open_total_value_hide.place(x=300, y=380, anchor=CENTER)
 report_finalized_value_1.place(x=580, y=210, anchor=CENTER)
 report_finalized_value_2.place(x=580, y=250, anchor=CENTER)
 report_finalized_value_3.place(x=580, y=290, anchor=CENTER)
 report_finalized_value_4.place(x=580, y=330, anchor=CENTER)
-report_finalized_total_value.place(x=580, y=380, anchor=CENTER)
+report_finalized_total_value_hide.place(x=580, y=380, anchor=CENTER)
 report_canceled_value_1.place(x=880, y=210, anchor=CENTER)
 report_canceled_value_2.place(x=880, y=250, anchor=CENTER)
 report_canceled_value_3.place(x=880, y=290, anchor=CENTER)
 report_canceled_value_4.place(x=880, y=330, anchor=CENTER)
-report_canceled_total_value.place(x=880, y=380, anchor=CENTER)
+report_canceled_total_value_hide.place(x=880, y=380, anchor=CENTER)
 report_print_button.place(x=880, y=520, anchor=CENTER)
 report_export_button.place(x=580, y=520, anchor=CENTER)
+report_hide_show_button.place(x=400, y=500, anchor=CENTER)
 # -----------------------------------------------------------------------------------------------------------
 # REPORT TAB COMMANDS
 # -----------------------------------------------------------------------------------------------------------
