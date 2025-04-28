@@ -14,6 +14,7 @@ SMTPUSER = os.getenv("SMTPUSER")
 SMTPPASSWORD = os.getenv("SMTPPASSWORD")
 FROMEMAIL = os.getenv("FROMEMAIL")
 TOEMAIL = os.getenv("TOEMAIL")
+FILEPATH = os.getenv("FILEPATH")
 
 
 def get_config():
@@ -45,17 +46,19 @@ def send_email(date):
     Returns:
         None
     """
+    files = ["relatorio", "login"]
     msg = MIMEMultipart()
     msg["From"] = FROMEMAIL
     msg["To"] = TOEMAIL
     msg["Subject"] = f"Relatório {date}"
     msg.attach(MIMEText(f"Relatório em anexo referente ao dia {date}", "plain"))
 
-    file_path = f"/home/estacionamento/Documentos/relatorio_{date}.csv"
-    with open(file_path, "rb") as file:
-        part = MIMEApplication(file.read(), Name=basename(file_path))
-        part['Content-Disposition'] = 'attachment; filename="%s"' % basename(file_path)
-        msg.attach(part)
+    for file in files:
+        file_path = f"{FILEPATH}output/{file}_{date}.csv"
+        with open(file_path, "rb") as file:
+            part = MIMEApplication(file.read(), Name=basename(file_path))
+            part['Content-Disposition'] = 'attachment; filename="%s"' % basename(file_path)
+            msg.attach(part)
 
     try:
         server = smtplib.SMTP(SMTPSERVER, SMTPPORT)
@@ -64,6 +67,10 @@ def send_email(date):
 
         text = msg.as_string()
         server.sendmail(FROMEMAIL, TOEMAIL, text)
+        for file in files:
+            file_path = f"{FILEPATH}output/{file}_{date}.csv"
+            if os.path.isfile(file_path):
+                os.remove(file_path)
     except Exception as e:
         print(f"- Failed to send email: {e}")
     finally:

@@ -38,6 +38,9 @@ style.configure('Treeview.Heading', font=(None, 12, "bold"), height=50)
 style.configure('TCheckbutton', font = 18)
 
 # VARIABLES
+
+FILEPATH = os.getenv("FILEPATH")
+
 login = StringVar(value="Usuário")
 password = StringVar(value="Senha")
 
@@ -161,7 +164,7 @@ font18 = ('Arial', 18, 'bold')
 font20 = ('Arial', 20, 'bold')
 font45 = ('Arial', 45, 'bold')
 
-eye_image = ImageTk.PhotoImage(file="/home/estacionamento/Documentos/parking-by-tps/eye.png")
+eye_image = ImageTk.PhotoImage(file=f"{FILEPATH}eye.png")
 
 show = BooleanVar(value=False)
 
@@ -511,6 +514,9 @@ def ending_parking(event, status):
     out_quit_return_button.set("Desistência")
     update_in_grid()
     update_out_grid()
+    total_open = get_total_open_parking()
+    if total_open == 0:
+        send_report_by_email()
 
 
 def sort_in_table(col):
@@ -898,7 +904,7 @@ def calc_report_metrics(event, userID: str):
     report_total_canceled_vehicles_4.set(metrics["total_canceled_cat_4"])
 
 
-def export_parking_to_csv():
+def export_parking_to_csv(send_msg=True):
     date = datetime.now().strftime("%Y_%m_%d")
     with get_dal_mysql() as db:
         parkings = db().select(db.parking.ALL).as_list()
@@ -927,9 +933,10 @@ def export_parking_to_csv():
             )
             report.append(line)
         report_df = pd.DataFrame(report)
-        report_df.to_csv(f"/home/estacionamento/Documentos/relatorio_{date}.csv", header=True)
-        open(f'/home/estacionamento/Documentos/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
-        mb.showinfo("SUCESSO", "Planilhas exportadas com sucesso na pasta Documentos.")
+        report_df.to_csv(f"{FILEPATH}output/relatorio_{date}.csv", header=True)
+        open(f'{FILEPATH}output/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
+        if send_msg:
+            mb.showinfo("SUCESSO", "Planilhas exportadas com sucesso na pasta Documentos.")
 
 
 def set_checkbox_cash(event):
@@ -976,8 +983,9 @@ def hide_and_show():
 
 
 def send_report_by_email():
-    export_parking_to_csv()
+    export_parking_to_csv(send_msg=False)
     send_email(datetime.now().strftime("%Y_%m_%d"))
+    
 # def open_login_modal(tab):
 #     login_modal = Toplevel()
 #     login_modal.protocol("WM_DELETE_WINDOW", go_to_parking_tab)
