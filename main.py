@@ -1,3 +1,5 @@
+import os
+import threading
 import pandas as pd
 import random
 import re
@@ -20,12 +22,16 @@ from models.status import *
 from models.users import *
 from models.impressora import *
 from models.vehicles import *
+from models.coletor_repC import RepEvoCollector
+
 
 from schemas.category import CategoryModel
 from schemas.model import ModelModel
 from schemas.parking import ParkingModel
 from schemas.users import UsersModel
 from schemas.vehicles import VehicleModel
+
+from screens.rep_evo_screen import RepEvoScreen
 
 
 # CONFIG
@@ -40,6 +46,8 @@ style.configure('TCheckbutton', font = 18)
 # VARIABLES
 
 FILEPATH = os.getenv("FILEPATH")
+
+FIFO_PATH = "/tmp/plate_fifo"
 
 login = StringVar(value="Usuário")
 password = StringVar(value="Senha")
@@ -164,11 +172,35 @@ font18 = ('Arial', 18, 'bold')
 font20 = ('Arial', 20, 'bold')
 font45 = ('Arial', 45, 'bold')
 
-eye_image = ImageTk.PhotoImage(file=f"{FILEPATH}eye.png")
+eye_image = ImageTk.PhotoImage(file="eye.png")
 
 show = BooleanVar(value=False)
 
 # AUXILIARY FUNCTIONS
+
+def fifo_monitor(root):
+    """
+    USAGE EXAMPLE: Monitor a FIFO pipe in the background and display an alert 
+    in a Tkinter app whenever a new license plate is detected.
+
+    This function starts a background thread that continuously listens for new
+    lines written to the FIFO file (e.g., by the ParkOCR detector). When a new
+    plate is received, a Tkinter messagebox is triggered on the main UI thread.
+    """
+    def worker():
+        if not os.path.exists(FIFO_PATH):
+            os.mkfifo(FIFO_PATH)
+        with open(FIFO_PATH, "r") as fifo:
+            while True:
+                line = fifo.readline()
+                if not line:
+                    continue
+                plate = line.strip()
+                if plate:
+                    root.after(0, lambda p=plate: mb.showinfo("Detected Plate", p))
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+
 def update_completion_list(element):
     if "model" in element:
         models = get_all_models()
@@ -218,9 +250,11 @@ def login_verification(event):
             if user["role"] == "admin":
                 root_notebook.tab(config_tab, state="normal")
                 root_notebook.tab(report_tab, state="normal")
+                root_notebook.tab(repc_tab, state="normal")
             else:
                 root_notebook.tab(config_tab, state="hidden")
                 root_notebook.tab(report_tab, state="hidden")
+                root_notebook.tab(repc_tab, state="hidden")
             log_in(user["name"])
             calc_total_count()
             root_notebook.select(parking_tab)
@@ -329,9 +363,9 @@ def print_parking(code):
     Corte(3)
     # ------------- Impressão chave
     AvancaPapel(3)
-    ImpressaoTexto(in_plate.get(), 2, 8, 17)
-    AvancaPapel(1)
     ImpressaoTexto(in_model.get(), 2, 8, 17)
+    AvancaPapel(1)
+    ImpressaoTexto(in_plate.get(), 2, 8, 17)
     AvancaPapel(1)
     ImpressaoTexto(in_color.get(), 2, 8, 17)
     AvancaPapel(1)
@@ -933,8 +967,8 @@ def export_parking_to_csv(send_msg=True):
             )
             report.append(line)
         report_df = pd.DataFrame(report)
-        report_df.to_csv(f"{FILEPATH}output/relatorio_{date}.csv", header=True)
-        open(f'{FILEPATH}output/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
+        report_df.to_csv(f"/home/estacionamento/Documentos/parking-by-tps/output/relatorio_{date}.csv", header=True)
+        open(f'/home/estacionamento/Documentos/parking-by-tps/output/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
         if send_msg:
             mb.showinfo("SUCESSO", "Planilhas exportadas com sucesso na pasta Documentos.")
 
@@ -1039,6 +1073,8 @@ config_tab = ttk.Frame(root_notebook)
 root_notebook.add(config_tab, text="Configurações", state="hidden")
 report_tab = ttk.Frame(root_notebook)
 root_notebook.add(report_tab, text="Relatórios", state="hidden")
+repc_tab = RepEvoScreen(root_notebook, controller=RepEvoCollector)
+root_notebook.add(repc_tab, text="Relógio Ponto", state="hidden")
 user_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
 user_frame.place(relx=0.98, y=0, anchor=NE)
 user_name_label = ttk.Label(user_frame, text="Usuário:", font=font13)
@@ -1350,7 +1386,7 @@ in_plate_entry.focus()
 # EXIT TAB WIDJETS
 # -----------------------------------------------------------------------------------------------------------
 out_plate_label_exit_tab = ttk.Label(exit_tab, text="Placa: ", font=font45)
-out_plate_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_plate, font=('Arial', 65, 'bold'))
+out_plate_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_plate, font=('Arial', 100, 'bold'), foreground="DarkViolet")
 out_model_label_exit_tab = ttk.Label(exit_tab, text="Modelo: ", font=font45)
 out_model_value_label_exit_tab = ttk.Label(exit_tab, textvariable=out_model, font=('Arial', 65, 'bold'))
 out_color_label_exit_tab = ttk.Label(exit_tab, text="Cor: ", font=font45)
@@ -1434,12 +1470,12 @@ discount_entry_exit_tab.bind("<Button-1>", on_click)
 # -----------------------------------------------------------------------------------------------------------
 # EXIT TAB LAYOUT
 # -----------------------------------------------------------------------------------------------------------
-out_plate_label_exit_tab.place(relx=0.25, y=100, anchor=SE)
-out_plate_value_label_exit_tab.place(relx=0.255, y=104, anchor=SW)
+out_plate_label_exit_tab.place(relx=0.65, y=110, anchor=SE)
+out_plate_value_label_exit_tab.place(relx=0.65, y=130, anchor=SW)
 out_model_label_exit_tab.place(relx=0.25, y=220, anchor=SE)
 out_model_value_label_exit_tab.place(relx=0.255, y=224, anchor=SW)
-out_color_label_exit_tab.place(relx=0.6, y=100, anchor=SE)
-out_color_value_label_exit_tab.place(relx=0.61, y=104, anchor=SW)
+out_color_label_exit_tab.place(relx=0.13, y=100, anchor=SE)
+out_color_value_label_exit_tab.place(relx=0.132, y=104, anchor=SW)
 out_category_label_exit_tab.place(relx=0.25, y=340, anchor=SE)
 out_category_value_label_exit_tab.place(relx=0.255, y=344, anchor=SW)
 in_time_label_exit_tab.place(relx=0.15, y=415, anchor=SE)
@@ -1927,5 +1963,6 @@ if __name__ == "__main__":
     df_out = get_today_parkings_as_df_out()
     mount_in_table()
     mount_out_table()
+    fifo_monitor(root)
     # login_modal.destroy()
     root.mainloop()

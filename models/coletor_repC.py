@@ -415,7 +415,7 @@ class RepEvoCollector:
         self.send_encrypted_command(command)
 
         try:
-            response_data = self.receive_response(timeout=60)
+            response_data = self.receive_response(timeout=160)
             response_str = self.parse_encrypted_response(response_data)
             return response_str
         except Exception as e:

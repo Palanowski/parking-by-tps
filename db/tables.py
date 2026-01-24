@@ -101,3 +101,9 @@ def define_tables(db):
         Field("model", "reference model.id"),
         primarykey=["id"],
     )
+
+    db.define_table(
+        "repc",
+        Field("created", "datetime"),
+        Field("name", "string", length=128, notnull=True),
+    )
