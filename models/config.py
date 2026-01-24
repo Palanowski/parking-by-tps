@@ -1,5 +1,6 @@
 import os
 import smtplib
+import subprocess
 from os.path import basename
 from datetime import date
 from email.mime.application import MIMEApplication
@@ -79,3 +80,16 @@ def send_email(date):
                 server.quit()
             except Exception as e:
                 print(f"Falha ao desconectar do servidor SMTP: {e}")
+
+
+def send_notification(titulo, plate, model, color):
+    mensagem = f"Veículo <b>{model} - {color}</b>\nPlaca: <b>{plate}</b>\nEstá com tempo excedido!"
+    # -i permite adicionar um ícone, ex: 'dialog-information' ou 'error'
+    subprocess.run([
+        'notify-send',
+        '-u', 'critical',
+        '-i', 'dialog-error',
+        '--hint', 'string:body-markup:yes',
+        titulo,
+        mensagem
+    ])

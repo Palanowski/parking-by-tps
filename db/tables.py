@@ -80,6 +80,8 @@ def define_tables(db):
         Field("discount", "double", default=None),
         Field("byPlate", "boolean", default=False),
         Field("byCash", "boolean", default=False),
+        Field("exit_plate_time", "time", default=None),
+        Field("exit_status", "string", length=45, default=None),
         primarykey=["id"],
     )
 
