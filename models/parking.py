@@ -1,7 +1,7 @@
 import pandas as pd
 
 from tkinter import messagebox as mb
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from db.dal_connect import get_dal_mysql
 from schemas.parking import ParkingModel
 from models.vehicles import get_vehicle_by_plate
@@ -147,6 +147,21 @@ def get_parkings_by_user_order_by_status(userID: str = None, statusID: str = Non
 
 
 def finalize_parking(plateID, delta_time, userID, total, addition=None, discount=None, byPlate=None, byCash=False):
+    dia_semana = datetime.weekday()
+    if dia_semana <= 4:
+        if datetime.now() < time(18, 19):
+            exit_plate_time = (datetime.now() + timedelta(minutes=7)).time()
+            exit_status="NORMAL"
+        else:
+            exit_plate_time = None
+            exit_status="DIVERGENTE"
+    elif dia_semana == 5:
+        if datetime.now() < time(12, 19):
+            exit_plate_time = (datetime.now() + timedelta(minutes=4)).time()
+            exit_status="NORMAL"
+        else:
+            exit_plate_time = None
+            exit_status="DIVERGENTE"
     with get_dal_mysql() as db:
         exit_time = datetime.now().time()
         db((db.parking.plate == plateID) & (db.parking.entry_date == datetime.now().date())).update(
@@ -159,6 +174,8 @@ def finalize_parking(plateID, delta_time, userID, total, addition=None, discount
             discount=discount,
             byPlate=byPlate,
             byCash=byCash,
+            exit_plate_time=exit_plate_time,
+            exit_status=exit_status,
         )
 
 
