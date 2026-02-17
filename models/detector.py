@@ -1,7 +1,10 @@
 import cv2
 import sys
 import logging
+from datetime import datetime
 from parkocr import Detector
+from models.parking import get_parking_by_plate, update_parking, calc_exit_status, insert_exit_plate_time
+from schemas.parking import UpdateParkingModel
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -51,7 +54,19 @@ def find_camera(ip: str, username: str = "", password: str = "") -> str | None:
 
 
 def on_plate_detected(plate: str):
-    print("Detected plate:", plate)
+    now = datetime.now()
+    parking = get_parking_by_plate(plate[3:])
+    if parking:
+        if parking.status == "FINALIZADO":
+            status = calc_exit_status(parking["delta_time"], parking["entry_time"], now)
+        elif parking.status in ["EM ABERTO", "RETORNO"]:
+            status = "DIVERGENTE"
+        update_parking(plate[3:], UpdateParkingModel(
+            exit_plate_time=now,
+            exit_status=status
+        ))
+    else:
+        insert_exit_plate_time(plate[3:], now, "DIVERGENTE")
 
 
 if __name__ == "__main__":

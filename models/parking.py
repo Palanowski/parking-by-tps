@@ -3,7 +3,7 @@ import pandas as pd
 from tkinter import messagebox as mb
 from datetime import datetime, time, timedelta
 from db.dal_connect import get_dal_mysql
-from schemas.parking import ParkingModel
+from schemas.parking import ParkingModel, UpdateParkingModel
 from models.vehicles import get_vehicle_by_plate
 
 def check_plate(plateID):
@@ -23,6 +23,15 @@ def post_parking(parkingModel: ParkingModel):
     with get_dal_mysql() as db:
         new = db.parking.insert(**parkingModel.model_dump())
     return new
+
+
+def insert_exit_plate_time(plate, exit_plate_time, exit_status):
+    with get_dal_mysql() as db:
+        db.parking.insert(
+            plate=plate,
+            exit_plate_time=exit_plate_time,
+            exit_status=exit_status
+        )
 
 
 def get_parkings_plates():
@@ -146,22 +155,18 @@ def get_parkings_by_user_order_by_status(userID: str = None, statusID: str = Non
     return result
 
 
+def update_parking(plate, parkingModel: UpdateParkingModel):
+    with get_dal_mysql() as db:
+        parking = db(
+            (db.parking.plate==plate)
+            & (db.parking.entry_date==datetime.now().date())
+        ).select().first()
+        if parking:
+            parking.update_record(**parkingModel.model_dump(exclude_unset=True))
+        else:
+            db.parking.insert(plate=plate, **parkingModel.model_dump(exclude_unset=True))
+
 def finalize_parking(plateID, delta_time, userID, total, addition=None, discount=None, byPlate=None, byCash=False):
-    dia_semana = datetime.weekday()
-    if dia_semana <= 4:
-        if datetime.now() < time(18, 19):
-            exit_plate_time = (datetime.now() + timedelta(minutes=7)).time()
-            exit_status="NORMAL"
-        else:
-            exit_plate_time = None
-            exit_status="DIVERGENTE"
-    elif dia_semana == 5:
-        if datetime.now() < time(12, 19):
-            exit_plate_time = (datetime.now() + timedelta(minutes=4)).time()
-            exit_status="NORMAL"
-        else:
-            exit_plate_time = None
-            exit_status="DIVERGENTE"
     with get_dal_mysql() as db:
         exit_time = datetime.now().time()
         db((db.parking.plate == plateID) & (db.parking.entry_date == datetime.now().date())).update(
@@ -174,8 +179,6 @@ def finalize_parking(plateID, delta_time, userID, total, addition=None, discount
             discount=discount,
             byPlate=byPlate,
             byCash=byCash,
-            exit_plate_time=exit_plate_time,
-            exit_status=exit_status,
         )
 
 
@@ -200,3 +203,11 @@ def clear_data_records():
         with get_dal_mysql() as db:
             db.parking.truncate()
     return True
+
+
+def calc_exit_status(delta_hours, entry_plate_time, exit_plate_time):
+    entry_time = datetime.combine(datetime.now().date(), entry_plate_time)
+    if exit_plate_time - timedelta(hours=delta_hours, minutes=6) <= entry_time:
+        return "NORMAL"
+    else:
+        return "DIVERGENTE"
