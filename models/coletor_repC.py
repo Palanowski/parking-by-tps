@@ -11,10 +11,19 @@ import base64
 import os
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5, AES
-from Crypto.Util.Padding import pad, unpad
-import struct
 import time
 from datetime import datetime
+from models.users import insert_users_repC
+
+
+FUNCIONARIOS = {
+    "08705432960":"EZEQUIEL GONCALVES DA ROSA",
+    "08531537959":"GLEDSON OSNILDO DE SOUZA",
+    "07377791950":"JHONATTAN DA SILVA MORAIS",
+    "11469513960":"PABLO ROBERTO RAULINO",
+    "13967582400":"ITALO RODRIGO DOS SANTOS BRITO",
+    "21262401838":"ANTHONY SILVA DE ALBUQUERQUE"
+}
 
 # employee_info_fields = dict(
 #     8531537959=dict(
@@ -542,7 +551,43 @@ def main():
             
             print(f"\n4. Coletando registros por data (últimos 30 dias)...")
             registers_data = collector.get_registers_by_date(start_date, 50)
+            registros = []
+            db_registers = []
             
+            # Dividir por linhas
+            linhas = registers_data.strip().split('\n')
+            
+            for linha in linhas:
+                linha = linha.strip()
+                if not linha or (len(linha.split(' '))<=1):
+                    continue
+                
+                try:
+                    # Formato AFD 00000025232026-01-05T06:57:00-030011469513960 FBEA\r
+                    partes = linha.split('T')
+                    linha_data = partes[0][-10:]
+                    partes_2 = partes[1].split('-')
+                    linha_hora = partes_2[0]
+                    linha_reg_number = partes_2[1].split(' ')[0].replace('0300','').replace('I', '')
+
+                    # Formatar data/hora
+                    data_hora = f"{linha_data} {linha_hora}"
+                    
+                    registros.append({
+                        'data_hora': data_hora,
+                        'data': linha_data,
+                        'hora': linha_hora,
+                        'funcionario': FUNCIONARIOS[linha_reg_number]
+                    })
+                    db_registers.append({
+                        'created': datetime.strptime(data_hora, "%Y-%m-%d %H:%M:%S"),
+                        'name': FUNCIONARIOS[linha_reg_number]
+                    })
+                    
+                except Exception as e:
+                    print(f"Erro ao processar linha: {linha} - {e}")
+                    continue
+            insert_users_repC(db_registers)
             if registers_data:
                 filename = collector.save_to_afd(registers_data)
                 result = (filename, registers_data)

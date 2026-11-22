@@ -1,21 +1,28 @@
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox as mb
-from datetime import datetime, timedelta
+from datetime import datetime
 import calendar
 import threading
 from models.coletor_repC import RepEvoCollector
+from models.users import insert_users_repC
 
-
+FUNCIONARIOS = {
+    "08705432960":"EZEQUIEL GONCALVES DA ROSA",
+    "08531537959":"GLEDSON OSNILDO DE SOUZA",
+    "07377791950":"JHONATTAN DA SILVA MORAIS",
+    "11469513960":"PABLO ROBERTO RAULINO",
+    "13967582400":"ITALO RODRIGO DOS SANTOS BRITO",
+    "21262401838":"ANTHONY SILVA DE ALBUQUERQUE"
+}
 class RepEvoScreen(ttk.Frame):
     """Tela para buscar registros de ponto do REP C EVO"""
     
-    def __init__(self, parent, controller):
+    def __init__(self, parent):
         super().__init__(parent)
-        self.controller = controller
         
         # Configurações do REP
-        self.rep_host = tk.StringVar(value="192.168.1.11")
+        self.rep_host = tk.StringVar(value="192.168.15.171")
         self.rep_port = tk.IntVar(value=3000)
         self.rep_username = tk.StringVar(value="teste fabrica")
         self.rep_password = tk.StringVar(value="132435")
@@ -32,6 +39,7 @@ class RepEvoScreen(ttk.Frame):
         
         # Collector instance
         self.collector = None
+        self.registros = None
         
         # Definir datas padrão (dia 1 ao último dia do mês atual)
         self.set_default_dates()
@@ -53,12 +61,13 @@ class RepEvoScreen(ttk.Frame):
         """Cria os widgets da tela"""
         
         # Frame principal com scroll
-        main_frame = ttk.Frame(self, padding=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = ttk.Frame(self)
+        main_frame.place(x=10, y=10, anchor=tk.NW, height=690, width=1260)
+        #main_frame.pack(fill=tk.X, expand=True)
         
         # ===== CONFIGURAÇÕES DE CONEXÃO =====
-        config_frame = ttk.LabelFrame(main_frame, text="Configurações do REP", padding=10)
-        config_frame.pack(fill=tk.X, pady=(0, 10))
+        config_frame = ttk.Frame(main_frame, borderwidth=2, relief="sunken")
+        config_frame.place(x=10, y=10, anchor=tk.NW, width=500, height=130)
         
         # Host
         ttk.Label(config_frame, text="Host:", font=('Arial', 12)).grid(
@@ -106,11 +115,11 @@ class RepEvoScreen(ttk.Frame):
             width=15,
             cursor="hand2"
         )
-        self.connect_button.grid(row=0, column=4, rowspan=2, padx=10, pady=5)
+        self.connect_button.place(x=220, y=90, anchor=tk.NW)
         
         # ===== FILTROS DE BUSCA =====
-        filter_frame = ttk.LabelFrame(main_frame, text="Filtros de Busca", padding=10)
-        filter_frame.pack(fill=tk.X, pady=(0, 10))
+        filter_frame = ttk.Frame(main_frame, borderwidth=2, relief="sunken")
+        filter_frame.place(x=10, y=150, anchor=tk.NW, width=500, height=200)
         
         # PIS do Funcionário
         ttk.Label(filter_frame, text="PIS Funcionário:", font=('Arial', 12, 'bold')).grid(
@@ -168,11 +177,11 @@ class RepEvoScreen(ttk.Frame):
             bg="lightblue",
             cursor="hand2",
             width=12
-        ).grid(row=2, column=3, padx=10, pady=5)
+        ).grid(row=3, column=2, padx=10, pady=5)
         
         # ===== BOTÃO DE BUSCA =====
-        search_frame = ttk.Frame(main_frame)
-        search_frame.pack(fill=tk.X, pady=10)
+        search_frame = ttk.Frame(main_frame, borderwidth=2, relief="sunken")
+        search_frame.place(x=10, y=360, anchor=tk.NW, width=500, height=150)
         
         self.search_button = tk.Button(
             search_frame,
@@ -187,11 +196,11 @@ class RepEvoScreen(ttk.Frame):
             cursor="hand2",
             state=tk.DISABLED
         )
-        self.search_button.pack(pady=10)
+        self.search_button.pack(side=tk.TOP ,pady=10)
         
         # ===== STATUS =====
         status_frame = ttk.LabelFrame(main_frame, text="Status", padding=10)
-        status_frame.pack(fill=tk.X, pady=(0, 10))
+        status_frame.place(x=10, y=520, anchor=tk.NW, width=500, height=100)
         
         self.status_label = ttk.Label(
             status_frame,
@@ -211,7 +220,7 @@ class RepEvoScreen(ttk.Frame):
         
         # ===== ÁREA DE RESULTADOS =====
         result_frame = ttk.LabelFrame(main_frame, text="Registros Encontrados", padding=10)
-        result_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        result_frame.place(x=530, y=10, anchor=tk.NW, width=700, height=610)
         
         # Criar Treeview com scrollbars
         tree_scroll_y = ttk.Scrollbar(result_frame, orient=tk.VERTICAL)
@@ -219,7 +228,7 @@ class RepEvoScreen(ttk.Frame):
         
         self.result_tree = ttk.Treeview(
             result_frame,
-            columns=("NSR", "Data/Hora", "PIS", "Tipo"),
+            columns=("Data/Hora", "Funcionário"),
             show="headings",
             yscrollcommand=tree_scroll_y.set,
             xscrollcommand=tree_scroll_x.set,
@@ -230,15 +239,13 @@ class RepEvoScreen(ttk.Frame):
         tree_scroll_x.config(command=self.result_tree.xview)
         
         # Configurar colunas
-        self.result_tree.heading("NSR", text="NSR")
         self.result_tree.heading("Data/Hora", text="Data/Hora")
-        self.result_tree.heading("PIS", text="PIS")
-        self.result_tree.heading("Tipo", text="Tipo")
+        self.result_tree.heading("Funcionário", text="Funcionário")
         
-        self.result_tree.column("NSR", width=80, anchor=tk.CENTER)
+        
         self.result_tree.column("Data/Hora", width=150, anchor=tk.CENTER)
-        self.result_tree.column("PIS", width=120, anchor=tk.CENTER)
-        self.result_tree.column("Tipo", width=100, anchor=tk.CENTER)
+        self.result_tree.column("Funcionário", width=120, anchor=tk.CENTER)
+        
         
         # Pack da árvore e scrollbars
         tree_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
@@ -246,19 +253,19 @@ class RepEvoScreen(ttk.Frame):
         self.result_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Label de total
-        self.total_label = ttk.Label(
-            result_frame,
-            text="Total: 0 registros",
-            font=('Arial', 11, 'bold')
-        )
-        self.total_label.pack(pady=5)
+        # self.total_label = ttk.Label(
+        #     result_frame,
+        #     text="Total: 0 registros",
+        #     font=('Arial', 11, 'bold')
+        # )
+        # self.total_label.pack(pady=5)
         
         # ===== BOTÕES DE AÇÃO =====
-        action_frame = ttk.Frame(main_frame)
-        action_frame.pack(fill=tk.X)
+        # action_frame = ttk.Frame(main_frame, borderwidth=2, relief="sunken")
+        # action_frame.pack(fill=tk.X)
         
         tk.Button(
-            action_frame,
+            search_frame,
             text="Exportar CSV",
             font=('Arial', 12, 'bold'),
             command=self.exportar_csv,
@@ -270,7 +277,7 @@ class RepEvoScreen(ttk.Frame):
         ).pack(side=tk.LEFT, padx=5)
         
         tk.Button(
-            action_frame,
+            search_frame,
             text="Limpar Resultados",
             font=('Arial', 12, 'bold'),
             command=self.limpar_resultados,
@@ -278,7 +285,7 @@ class RepEvoScreen(ttk.Frame):
             activebackground="coral1",
             width=15,
             cursor="hand2"
-        ).pack(side=tk.LEFT, padx=5)
+        ).pack(side=tk.RIGHT, padx=5)
     
     def toggle_connection(self):
         """Conecta ou desconecta do REP"""
@@ -389,7 +396,7 @@ class RepEvoScreen(ttk.Frame):
                 # Usar quantidade grande para pegar todos os registros do período
                 registers_data = self.collector.get_registers_by_date(
                     start_date=start_datetime,
-                    quantity=100000
+                    quantity=150
                 )
                 
                 if not registers_data:
@@ -397,25 +404,25 @@ class RepEvoScreen(ttk.Frame):
                 
                 # Processar e filtrar registros
                 self.update_status("Processando registros...", "orange")
-                registros = self.processar_registros(registers_data)
+                self.registros = self.processar_registros(registers_data)
                 
                 # Filtrar por PIS se informado
                 pis = self.pis_funcionario.get().strip()
                 if pis:
-                    registros = [r for r in registros if r['pis'] == pis]
+                    self.registros = [r for r in self.registros if r['pis'] == pis]
                 
                 # Filtrar por período
-                registros = self.filtrar_por_periodo(registros)
+                # registros = self.filtrar_por_periodo(registros)
                 
                 # Exibir resultados
-                self.exibir_registros(registros)
+                self.exibir_registros(self.registros)
                 
-                self.update_status(f"Coleta concluída! {len(registros)} registros encontrados", "green")
+                self.update_status(f"Coleta concluída! {len(self.registros)} registros encontrados", "green")
                 
-                if len(registros) == 0:
+                if len(self.registros) == 0:
                     mb.showinfo("Informação", "Nenhum registro encontrado para os filtros informados.")
                 else:
-                    mb.showinfo("Sucesso", f"{len(registros)} registros encontrados!")
+                    mb.showinfo("Sucesso", f"{len(self.registros)} registros encontrados!")
                 
             except Exception as e:
                 self.update_status(f"Erro na coleta: {str(e)}", "red")
@@ -434,41 +441,42 @@ class RepEvoScreen(ttk.Frame):
     def processar_registros(self, data):
         """Processa os registros retornados pelo REP"""
         registros = []
+        db_registers = []
         
         # Dividir por linhas
         linhas = data.strip().split('\n')
         
         for linha in linhas:
             linha = linha.strip()
-            if not linha or not linha.startswith('3'):
+            if not linha or (len(linha.split(' '))<=1):
                 continue
             
             try:
-                # Formato AFD tipo 3: 3|NSR|DATA|HORA|PIS
-                partes = linha.split('|')
+                # Formato AFD 00000025232026-01-05T06:57:00-030011469513960 FBEA\r
+                partes = linha.split('T')
+                linha_data = partes[0][-10:]
+                partes_2 = partes[1].split('-')
+                linha_hora = partes_2[0]
+                linha_reg_number = partes_2[1].split(' ')[0].replace('0300','').replace('I', '')
+
+                # Formatar data/hora
+                data_hora = f"{linha_data} {linha_hora}"
                 
-                if len(partes) >= 5:
-                    tipo = partes[0]
-                    nsr = partes[1]
-                    data = partes[2]
-                    hora = partes[3]
-                    pis = partes[4]
-                    
-                    # Formatar data/hora
-                    data_hora = f"{data} {hora}"
-                    
-                    registros.append({
-                        'tipo': tipo,
-                        'nsr': nsr,
-                        'data_hora': data_hora,
-                        'data': data,
-                        'hora': hora,
-                        'pis': pis
-                    })
+                registros.append({
+                    'data_hora': data_hora,
+                    'data': linha_data,
+                    'hora': linha_hora,
+                    'funcionario': FUNCIONARIOS[linha_reg_number]
+                })
+                db_registers.append({
+                    'created': datetime.strptime(data_hora, "%Y-%m-%d %H:%M:%S"),
+                    'name': FUNCIONARIOS[linha_reg_number]
+                })
+                
             except Exception as e:
                 print(f"Erro ao processar linha: {linha} - {e}")
                 continue
-        
+        insert_users_repC(db_registers)
         return registros
     
     def filtrar_por_periodo(self, registros):
@@ -513,14 +521,12 @@ class RepEvoScreen(ttk.Frame):
                 data_hora_display = reg['data_hora']
             
             self.result_tree.insert('', 'end', values=(
-                reg['nsr'],
                 data_hora_display,
-                reg['pis'],
-                'Registro'
+                reg['funcionario'],
             ))
         
         # Atualizar total
-        self.total_label.config(text=f"Total: {len(registros)} registros")
+        # self.total_label.config(text=f"Total: {len(registros)} registros")
     
     def exportar_csv(self):
         """Exporta registros para CSV"""
@@ -532,16 +538,15 @@ class RepEvoScreen(ttk.Frame):
         
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"registros_rep_{timestamp}.csv"
+            filename = f"/home/estacionamento/Documentos/parking-by-tps/output/registros_ponto_{timestamp}.csv"
             
             with open(filename, 'w', encoding='utf-8') as f:
                 # Cabeçalho
-                f.write("NSR;Data/Hora;PIS;Tipo\n")
+                f.write("Data/Hora;Nome\n")
                 
                 # Dados
-                for item in items:
-                    values = self.result_tree.item(item)['values']
-                    f.write(f"{values[0]};{values[1]};{values[2]};{values[3]}\n")
+                for item in self.registros:
+                    f.write(f"{item[0]};{item[1]}\n")
             
             mb.showinfo("Sucesso", f"Registros exportados para:\n{filename}")
             

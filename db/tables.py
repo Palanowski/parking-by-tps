@@ -80,6 +80,21 @@ def define_tables(db):
         Field("discount", "double", default=None),
         Field("byPlate", "boolean", default=False),
         Field("byCash", "boolean", default=False),
+        Field("exit_plate_time", "time", default=None),
+        Field("exit_status", "string", length=45, default=None),
+        primarykey=["id"],
+    )
+
+    db.define_table(
+        "aux_parking",
+        Field("id", "integer", notnull=True),
+        Field("plate", "string", length=10, notnull=True),
+        Field("category", "reference category.id"),
+        Field("model", "reference model.id"),
+        Field("color", "reference color.id"),
+        Field("entry_date", "date", default=lambda: datetime.now().date()),
+        Field("exit_plate_time", "time", default=None),
+        Field("exit_status", "string", length=45, default=None),
         primarykey=["id"],
     )
 

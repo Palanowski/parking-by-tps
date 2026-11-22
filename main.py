@@ -1,9 +1,11 @@
 import os
+import sys
 import threading
+import subprocess
 import pandas as pd
 import random
 import re
-from datetime import datetime, timedelta
+from datetime import time, datetime, timedelta
 import tkinter.ttk as ttk
 from tkinter import *
 from tkinter.constants import *
@@ -11,6 +13,7 @@ from tkinter import messagebox as mb
 from tkinter.simpledialog import askinteger
 from ttkwidgets.autocomplete import AutocompleteCombobox
 from PIL import ImageTk
+from signal import pthread_kill, SIGTSTP
 
 from models.color import *
 from models.category import *
@@ -23,7 +26,7 @@ from models.users import *
 from models.impressora import *
 from models.vehicles import *
 from models.coletor_repC import RepEvoCollector
-
+from models.detector import start_detector, watch_detector
 
 from schemas.category import CategoryModel
 from schemas.model import ModelModel
@@ -47,7 +50,6 @@ style.configure('TCheckbutton', font = 18)
 
 FILEPATH = os.getenv("FILEPATH")
 
-FIFO_PATH = "/tmp/plate_fifo"
 
 login = StringVar(value="Usuário")
 password = StringVar(value="Senha")
@@ -115,7 +117,7 @@ change_value = StringVar(value="0.00")
 addition = StringVar(value="0.00")
 discount = StringVar(value="0.00")
 byCashVar = BooleanVar()
-out_quit_return_button = StringVar(value="Desistência")
+out_quit_return_button = StringVar(value="Desistencia")
 
 report_resp_var = StringVar(value="GERAL")
 report_total_vehicles = IntVar()
@@ -178,28 +180,44 @@ show = BooleanVar(value=False)
 
 # AUXILIARY FUNCTIONS
 
-def fifo_monitor(root):
-    """
-    USAGE EXAMPLE: Monitor a FIFO pipe in the background and display an alert 
-    in a Tkinter app whenever a new license plate is detected.
 
-    This function starts a background thread that continuously listens for new
-    lines written to the FIFO file (e.g., by the ParkOCR detector). When a new
-    plate is received, a Tkinter messagebox is triggered on the main UI thread.
-    """
-    def worker():
-        if not os.path.exists(FIFO_PATH):
-            os.mkfifo(FIFO_PATH)
-        with open(FIFO_PATH, "r") as fifo:
-            while True:
-                line = fifo.readline()
-                if not line:
-                    continue
-                plate = line.strip()
-                if plate:
-                    root.after(0, lambda p=plate: mb.showinfo("Detected Plate", p))
-    t = threading.Thread(target=worker, daemon=True)
-    t.start()
+def leitura_automatica_repC():
+    host = "192.168.15.171"
+    port = 3000
+    username = "teste fabrica"
+    password = "132435"
+    
+    collector = RepEvoCollector(host=host, port=port)
+    
+    collector.connect()
+    collector.request_public_key()
+    collector.authenticate(username, password)
+    today = datetime.now()
+    two_days_ago = today.replace(day=today.day - 4)
+    start_date = two_days_ago.strftime("%d/%m/%Y 00:00:01")
+    registers_data = collector.get_registers_by_date(start_date, 100)
+    registros_tratados = processar_registros_lidos(registers_data)
+    insert_users_repC(registros_tratados)
+
+
+def agendar_leitura_repC():
+    agora = datetime.now()
+    hora_alvo = time(18, 30) # 18:30:00
+    
+    # Define a data/hora alvo para hoje
+    data_alvo = datetime.combine(agora.date(), hora_alvo)
+    
+    # Se já passou das 18:30 hoje, agenda para amanhã
+    if agora > data_alvo:
+        data_alvo += timedelta(days=1)
+        
+    # Calcula a diferença em milissegundos
+    diferenca = data_alvo - agora
+    milisegundos = int(diferenca.total_seconds() * 1000)
+    
+    # Agenda a função
+    root.after(milisegundos, leitura_automatica_repC)
+
 
 def update_completion_list(element):
     if "model" in element:
@@ -250,11 +268,11 @@ def login_verification(event):
             if user["role"] == "admin":
                 root_notebook.tab(config_tab, state="normal")
                 root_notebook.tab(report_tab, state="normal")
-                root_notebook.tab(repc_tab, state="normal")
+                # root_notebook.tab(repc_tab, state="normal")
             else:
                 root_notebook.tab(config_tab, state="hidden")
                 root_notebook.tab(report_tab, state="hidden")
-                root_notebook.tab(repc_tab, state="hidden")
+                # root_notebook.tab(repc_tab, state="hidden")
             log_in(user["name"])
             calc_total_count()
             root_notebook.select(parking_tab)
@@ -545,7 +563,7 @@ def ending_parking(event, status):
                 return_parking(plateID)
                 clear_data("out")
                 out_barcode_entry.focus()
-    out_quit_return_button.set("Desistência")
+    out_quit_return_button.set("Desistencia")
     update_in_grid()
     update_out_grid()
     total_open = get_total_open_parking()
@@ -610,7 +628,7 @@ def mount_in_table():
         elif values[7] == "FINALIZADO":
             bg_tag = "gray"
             #out_table.insert("", 0, values=values, tags=bg_tag)
-        elif values[7] == "DESISTÊNCIA":
+        elif values[7] == "DESISTENCIA":
             bg_tag = "red"
             #out_table.insert("", 0, values=values, tags=bg_tag)
         in_table.insert("", 0, values=values, tags=bg_tag)
@@ -664,7 +682,7 @@ def check_element(event, element):
                 mb.showwarning("ALERTA", "Modelo não encontrado")
     elif element == "in plate":
         plateID = in_plate.get().lower()
-        in_plate.set(re.sub('[\W_]+', '', plateID))
+        in_plate.set(re.sub(r'[\W_]+', '', plateID))
         if not plateID:
             mb.showwarning("ALERTA", "Digite uma placa válida")
             in_plate_entry.focus()
@@ -688,7 +706,7 @@ def check_element(event, element):
             out_color.set(parking["color"])
             byPlateVar.set(True)
             out_finalize_button.focus()
-            if parking["status"] in ["DESISTÊNCIA", "FINALIZADO"]:
+            if parking["status"] in ["DESISTENCIA", "FINALIZADO"]:
                 out_quit_return_button.set("Retorno")
                 out_cancel_button.focus()
             else:
@@ -704,7 +722,7 @@ def check_element(event, element):
             out_category.set(parking["category"])
             out_color.set(parking["color"])
             byPlateVar.set(False)
-            if parking["status"] in ["DESISTÊNCIA", "FINALIZADO"]:
+            if parking["status"] in ["DESISTENCIA", "FINALIZADO"]:
                 out_quit_return_button.set("Retorno")
             else:
                 open_exit_tab("barcode")
@@ -964,11 +982,31 @@ def export_parking_to_csv(send_msg=True):
                 desconto=parking["discount"],
                 tipo_fechamento="PLACA" if parking["byPlate"] else "CODIGO-DE-BARRAS",
                 pagamento="DINHEIRO" if parking["byCash"] else "CARTÃO",
+                leitura_placa_saida=parking["exit_plate_time"],
+                status_saida=parking["exit_status"],                
             )
             report.append(line)
         report_df = pd.DataFrame(report)
         report_df.to_csv(f"/home/estacionamento/Documentos/parking-by-tps/output/relatorio_{date}.csv", header=True)
+        aux_parkings = db().select(db.aux_parking.ALL).as_list()
+        report_div = list()
+        for aux_parking in aux_parkings:
+            line = dict(
+                id=aux_parking["id"],
+                placa=aux_parking["plate"],
+                modelo=aux_parking["model"],
+                categoria=aux_parking["category"],
+                cor=aux_parking["color"],
+                data=aux_parking["entry_date"],
+                leitura_placa_saida=aux_parking["exit_plate_time"],
+                status_saida=aux_parking["exit_status"],                
+            )
+            report_div.append(line)
+        report_div_df = pd.DataFrame(report_div)
+        report_div_df.to_csv(f"/home/estacionamento/Documentos/parking-by-tps/output/relatorio_divergente_{date}.csv", header=True)
         open(f'/home/estacionamento/Documentos/parking-by-tps/output/login_{date}.csv', 'w').write(str(db().select(db.log_in.ALL)))
+        start_date = datetime.today().replace(day=1, hour=0, minute=0, second=1)
+        open(f'/home/estacionamento/Documentos/parking-by-tps/output/ponto_{date}.csv', 'w').write(str(db(db.repc.created>=start_date).select(db.repc.ALL)))
         if send_msg:
             mb.showinfo("SUCESSO", "Planilhas exportadas com sucesso na pasta Documentos.")
 
@@ -1073,8 +1111,8 @@ config_tab = ttk.Frame(root_notebook)
 root_notebook.add(config_tab, text="Configurações", state="hidden")
 report_tab = ttk.Frame(root_notebook)
 root_notebook.add(report_tab, text="Relatórios", state="hidden")
-repc_tab = RepEvoScreen(root_notebook, controller=RepEvoCollector)
-root_notebook.add(repc_tab, text="Relógio Ponto", state="hidden")
+# repc_tab = RepEvoScreen(root_notebook)
+# root_notebook.add(repc_tab, text="Relógio Ponto", state="hidden")
 user_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
 user_frame.place(relx=0.98, y=0, anchor=NE)
 user_name_label = ttk.Label(user_frame, text="Usuário:", font=font13)
@@ -1958,11 +1996,15 @@ report_tab_frame.bind_all("<KeyPress-d>", set_checkbox_cash)
 
 if __name__ == "__main__":
     open_printer_connection()
+    if get_old_parkings():
+        send_report_by_email()
+        clear_old_records()
     global df_in, df_out
     df_in = get_today_parkings_as_df_in()
     df_out = get_today_parkings_as_df_out()
     mount_in_table()
     mount_out_table()
-    fifo_monitor(root)
-    # login_modal.destroy()
+    agendar_leitura_repC()
+    start_detector()
+    watch_detector(root)
     root.mainloop()

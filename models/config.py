@@ -46,29 +46,29 @@ def send_email(date):
     Returns:
         None
     """
-    files = ["relatorio", "login"]
+    files = ["relatorio", "relatorio_divergente","login", "ponto"]
     msg = MIMEMultipart()
-    msg["From"] = FROMEMAIL
-    msg["To"] = TOEMAIL
+    msg["From"] = "palanowski@gmail.com"
+    msg["To"] = "estacionamentocosteira@gmail.com"
     msg["Subject"] = f"Relatório {date}"
     msg.attach(MIMEText(f"Relatório em anexo referente ao dia {date}", "plain"))
 
     for file in files:
-        file_path = f"{FILEPATH}output/{file}_{date}.csv"
+        file_path = f"/home/estacionamento/Documentos/parking-by-tps/output/{file}_{date}.csv"
         with open(file_path, "rb") as file:
             part = MIMEApplication(file.read(), Name=basename(file_path))
             part['Content-Disposition'] = 'attachment; filename="%s"' % basename(file_path)
             msg.attach(part)
-
+# "uory gsdj myrt pqau"
     try:
-        server = smtplib.SMTP(SMTPSERVER, SMTPPORT)
+        server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
-        server.login(SMTPUSER, SMTPPASSWORD)
+        server.login("palanowski@gmail.com", "dytg kvmw prmo khkq")
 
         text = msg.as_string()
-        server.sendmail(FROMEMAIL, TOEMAIL, text)
+        server.sendmail("palanowski@gmail.com", "estacionamentocosteira@gmail.com", text)
         for file in files:
-            file_path = f"{FILEPATH}output/{file}_{date}.csv"
+            file_path = f"/home/estacionamento/Documentos/parking-by-tps/output/{file}_{date}.csv"
             if os.path.isfile(file_path):
                 os.remove(file_path)
     except Exception as e:

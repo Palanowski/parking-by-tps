@@ -1,9 +1,9 @@
 import pandas as pd
 
 from tkinter import messagebox as mb
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from db.dal_connect import get_dal_mysql
-from schemas.parking import ParkingModel
+from schemas.parking import ParkingModel, UpdateParkingModel
 from models.vehicles import get_vehicle_by_plate
 
 def check_plate(plateID):
@@ -23,6 +23,24 @@ def post_parking(parkingModel: ParkingModel):
     with get_dal_mysql() as db:
         new = db.parking.insert(**parkingModel.model_dump())
     return new
+
+
+def insert_exit_plate_time(plate, exit_plate_time, exit_status):
+    with get_dal_mysql() as db:
+        park = db(
+            (db.aux_parking.plate==plate)
+        ).select().first()
+        if park:
+            return
+        else:
+            db.aux_parking.insert(
+                plate=plate,
+                model="MODELO",
+                color="COR",
+                category="1-CARRO",
+                exit_plate_time=exit_plate_time,
+                exit_status=exit_status
+            )
 
 
 def get_parkings_plates():
@@ -146,6 +164,23 @@ def get_parkings_by_user_order_by_status(userID: str = None, statusID: str = Non
     return result
 
 
+def get_old_parkings():
+    result = False
+    with get_dal_mysql() as db:
+        parkings = db(db.parking.entry_date < datetime.now().date()).select().as_list()
+    if parkings:
+        result = True
+    return result
+
+def update_parking(plate, exit_plate_time, exit_status):
+    with get_dal_mysql() as db:
+        parking = db(
+            (db.parking.plate==plate)
+            & (db.parking.entry_date==datetime.now().date())
+        ).select().first()
+        if parking:
+            db(db.parking.plate==plate).update(exit_plate_time=exit_plate_time, exit_status=exit_status)
+
 def finalize_parking(plateID, delta_time, userID, total, addition=None, discount=None, byPlate=None, byCash=False):
     with get_dal_mysql() as db:
         exit_time = datetime.now().time()
@@ -167,7 +202,7 @@ def cancel_parking(plateID, userID):
         db(
             (db.parking.plate == plateID)
             & (db.parking.entry_date==datetime.now().date())
-        ).update(exit_time=datetime.now().time(), status="DESISTÊNCIA", exit_user=userID, total_value=0, addition=0, discount=0)
+        ).update(exit_time=datetime.now().time(), status="DESISTENCIA", exit_user=userID, total_value=0, addition=0, discount=0)
 
 
 def return_parking(plateID):
@@ -182,4 +217,21 @@ def clear_data_records():
     if mb.askyesno("ATENÇÃO", "Você deseja apagar o histórico de veículos"):
         with get_dal_mysql() as db:
             db.parking.truncate()
+            db.aux_parking.truncate()
     return True
+
+
+def clear_old_records():
+    with get_dal_mysql() as db:
+        db(db.parking.entry_date < datetime.now().date()).delete()
+        db(db.aux_parking.exit_plate_time < datetime.now().date()).delete()
+
+def calc_exit_status(delta_time, entry_plate_time, exit_plate_time):
+    entry_time = datetime.combine(datetime.now().date(), entry_plate_time)
+    delta_hours = delta_time.hour if delta_time.hour >=1 else 1
+    if delta_time.minute >= 6:
+        delta_hours += 1
+    if exit_plate_time - timedelta(hours=delta_hours, minutes=6) <= entry_time:
+        return "NORMAL"
+    else:
+        return "DIVERGENTE"

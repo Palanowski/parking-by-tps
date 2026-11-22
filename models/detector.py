@@ -1,72 +1,81 @@
-import cv2
-import sys
+"""Integração do leitor de placas com o sistema.
+
+- `start_detector()` / `stop_detector()`: sobem e derrubam o processo leitor
+  (`python -m models.lpr`), separado da interface Tk para não travá-la.
+- `on_plate_detected()`: grava a saída do veículo no banco; é chamada dentro
+  do processo leitor a cada placa confirmada.
+"""
+
+import atexit
 import logging
-from parkocr import Detector
+import subprocess
+import sys
+from datetime import datetime
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+from models.lpr.config import PROJECT_ROOT
 
+log = logging.getLogger("lpr.detector")
 
-CAMERA_IP = "192.168.1.2"     # find camera IP on your network
-CAMERA_USER = "admin"
-CAMERA_PASS = "Serenalui18"
-
-
-COMMON_PATHS = [
-    "rtsp://{ip}:554/onvif1",
-    "rtsp://{ip}:554/onvif2",
-    "rtsp://{ip}:554/onvif1?tcp",
-    "rtsp://{ip}:554/onvif2?tcp",
-    "rtsp://{ip}/live",
-    "rtsp://{ip}/h264",
-    "rtsp://{ip}/h264/ch1/main/av_stream",
-    "rtsp://{ip}/cam/realmonitor?channel=1&subtype=0",
-    "rtsp://{ip}/Streaming/Channels/101",
-    "rtsp://{ip}/axis-media/media.amp",
-    "rtsp://{ip}/live/ch00_0",
-    "rtsp://{ip}/user=admin&password=&channel=1&stream=0.sdp",
-]
+_process: subprocess.Popen | None = None
 
 
-def find_camera(ip: str, username: str = "", password: str = "") -> str | None:
-    """
-    Iterate over common RTSP endpoints and return the first working URL.
-    Find your camera local IP and configure credentials first. If your
-    camera model uses a different url pattern, add it to COMMON_PATHS.
-    """
-    for path in COMMON_PATHS:
-        if username and password:
-            url = path.format(ip=f"{username}:{password}@{ip}")
-        else:
-            url = path.format(ip=ip)
-        logging.info(f"Trying: {url}")
-        cap = cv2.VideoCapture(url)
-        if cap.isOpened():
-            ok, _ = cap.read()
-            cap.release()
-            if ok:
-                logging.info(f"Found working stream: {url}")
-                return url
-    logging.warning("No working stream found.")
-    return None
-
-
-def on_plate_detected(plate: str):
-    print("Detected plate:", plate)
-
-
-if __name__ == "__main__":
-    url = find_camera(CAMERA_IP, CAMERA_USER, CAMERA_PASS)
-    if url:
-        print("Camera stream URL:", url)
-    else:
-        print("No stream found.")
-        sys.exit(1)
-    det = Detector(
-        rtsp_url=url,
-        # roi=(500, 200, 1200, 600),
-        headless=False,
-        on_detect=on_plate_detected,
-        fifo_output='/tmp/plate_fifo',
-        screenshot="roi"
+def on_plate_detected(plate: str) -> None:
+    from models.parking import (
+        calc_exit_status,
+        get_parking_by_plate,
+        insert_exit_plate_time,
+        update_parking,
     )
-    det.run()
+
+    key = plate[3:]  # as 3 letras iniciais são desconsideradas de propósito
+    now = datetime.now()
+    parking = get_parking_by_plate(key)
+    if not parking:
+        insert_exit_plate_time(key, now.time(), "DIVERGENTE")
+        log.info("Saída %s sem entrada registrada -> DIVERGENTE", plate)
+        return
+
+    status = "NORMAL"
+    if parking["status"] in ("FINALIZADO", "DESISTENCIA"):
+        delta_time = datetime.strptime(parking["delta_time"], "%H:%M:%S")
+        status = calc_exit_status(delta_time, parking["entry_time"], now)
+    elif parking["status"] in ("EM ABERTO", "RETORNO"):
+        status = "DIVERGENTE"
+    update_parking(key, exit_plate_time=now.time(), exit_status=status)
+    log.info("Saída %s registrada -> %s", plate, status)
+
+
+def start_detector() -> subprocess.Popen:
+    """Inicia o processo leitor (uma única vez). Reinicia se ele tiver morrido."""
+    global _process
+    if _process is not None and _process.poll() is None:
+        return _process
+    _process = subprocess.Popen(
+        [sys.executable, "-m", "models.lpr"],
+        cwd=PROJECT_ROOT,
+    )
+    log.info("Leitor de placas iniciado (pid %s)", _process.pid)
+    return _process
+
+
+def stop_detector() -> None:
+    global _process
+    if _process is None or _process.poll() is not None:
+        return
+    _process.terminate()
+    try:
+        _process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        _process.kill()
+    _process = None
+
+
+def watch_detector(root, interval_ms: int = 30000) -> None:
+    """Confere periodicamente pelo loop do Tk e reinicia o leitor se ele caiu."""
+    if _process is not None and _process.poll() is not None:
+        log.warning("Leitor de placas encerrou (código %s); reiniciando", _process.returncode)
+        start_detector()
+    root.after(interval_ms, watch_detector, root, interval_ms)
+
+
+atexit.register(stop_detector)
