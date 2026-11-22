@@ -1,5 +1,6 @@
 import os
 import smtplib
+import subprocess
 from os.path import basename
 from datetime import date
 from email.mime.application import MIMEApplication

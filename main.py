@@ -5,6 +5,8 @@ import subprocess
 import pandas as pd
 import random
 import re
+import subprocess
+import threading
 from datetime import time, datetime, timedelta
 import tkinter.ttk as ttk
 from tkinter import *
@@ -17,6 +19,7 @@ from signal import pthread_kill, SIGTSTP
 
 from models.color import *
 from models.category import *
+from models.coletor_repC import RepEvoCollector
 from models.config import *
 from models.model import *
 from models.parking import *
@@ -49,6 +52,7 @@ style.configure('TCheckbutton', font = 18)
 # VARIABLES
 
 FILEPATH = os.getenv("FILEPATH")
+FIFO_PATH = "/tmp/plate_fifo"
 
 
 login = StringVar(value="Usuário")
@@ -174,12 +178,11 @@ font18 = ('Arial', 18, 'bold')
 font20 = ('Arial', 20, 'bold')
 font45 = ('Arial', 45, 'bold')
 
-eye_image = ImageTk.PhotoImage(file="eye.png")
-
+#eye_image = ImageTk.PhotoImage(file="/home/offer/Documentos/Projetos/parking-by-tps/eye.png")
+icon = "/home/offer/Documentos/Projetos/parking-by-tps/ladrao.png"
 show = BooleanVar(value=False)
 
 # AUXILIARY FUNCTIONS
-
 
 def leitura_automatica_repC():
     host = "192.168.15.171"
@@ -189,15 +192,16 @@ def leitura_automatica_repC():
     
     collector = RepEvoCollector(host=host, port=port)
     
-    collector.connect()
-    collector.request_public_key()
-    collector.authenticate(username, password)
-    today = datetime.now()
-    two_days_ago = today.replace(day=today.day - 4)
-    start_date = two_days_ago.strftime("%d/%m/%Y 00:00:01")
-    registers_data = collector.get_registers_by_date(start_date, 100)
-    registros_tratados = processar_registros_lidos(registers_data)
-    insert_users_repC(registros_tratados)
+    try:
+        collector.connect()
+        collector.request_public_key()
+        collector.authenticate(username, password)
+        today = datetime.now()
+        two_days_ago = today.replace(day=today.day - 2)
+        start_date = two_days_ago.strftime("%d/%m/%Y 00:00:01")
+        registers_data = collector.get_registers_by_date(start_date, 100)
+    except Exception as e:
+        agendar_leitura_repC()
 
 
 def agendar_leitura_repC():
@@ -216,8 +220,31 @@ def agendar_leitura_repC():
     milisegundos = int(diferenca.total_seconds() * 1000)
     
     # Agenda a função
-    root.after(milisegundos, leitura_automatica_repC)
+    root.after(milisegundos, send_notification, "Alerta", "5G80", "T-CROSS", "BRANCO")
 
+
+def fifo_monitor(root):
+    """
+    USAGE EXAMPLE: Monitor a FIFO pipe in the background and display an alert 
+    in a Tkinter app whenever a new license plate is detected.
+
+    This function starts a background thread that continuously listens for new
+    lines written to the FIFO file (e.g., by the ParkOCR detector). When a new
+    plate is received, a Tkinter messagebox is triggered on the main UI thread.
+    """
+    def worker():
+        if not os.path.exists(FIFO_PATH):
+            os.mkfifo(FIFO_PATH)
+        with open(FIFO_PATH, "r") as fifo:
+            while True:
+                line = fifo.readline()
+                if not line:
+                    continue
+                plate = line.strip()
+                if plate:
+                    root.after(0, lambda p=plate: mb.showinfo("Detected Plate", p))
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
 
 def update_completion_list(element):
     if "model" in element:
@@ -268,11 +295,11 @@ def login_verification(event):
             if user["role"] == "admin":
                 root_notebook.tab(config_tab, state="normal")
                 root_notebook.tab(report_tab, state="normal")
-                # root_notebook.tab(repc_tab, state="normal")
+                root_notebook.tab(rep_evo_tab, state="normal")
             else:
                 root_notebook.tab(config_tab, state="hidden")
                 root_notebook.tab(report_tab, state="hidden")
-                # root_notebook.tab(repc_tab, state="hidden")
+                root_notebook.tab(rep_evo_tab, state="hidden")
             log_in(user["name"])
             calc_total_count()
             root_notebook.select(parking_tab)
@@ -1057,7 +1084,21 @@ def hide_and_show():
 def send_report_by_email():
     export_parking_to_csv(send_msg=False)
     send_email(datetime.now().strftime("%Y_%m_%d"))
-    
+
+
+def send_notification(titulo, plate, model, color):
+    mensagem = f"Veículo <b>{model} - {color}</b>\nPlaca: <b>{plate}</b>\nEstá com tempo excedido!"
+    # -i permite adicionar um ícone, ex: 'dialog-information' ou 'error'
+    subprocess.run([
+        'notify-send',
+        '-u', 'critical',
+        '-i', 'dialog-error',
+        '--hint', 'string:body-markup:yes',
+        titulo,
+        mensagem
+    ])
+
+
 # def open_login_modal(tab):
 #     login_modal = Toplevel()
 #     login_modal.protocol("WM_DELETE_WINDOW", go_to_parking_tab)
@@ -1111,8 +1152,8 @@ config_tab = ttk.Frame(root_notebook)
 root_notebook.add(config_tab, text="Configurações", state="hidden")
 report_tab = ttk.Frame(root_notebook)
 root_notebook.add(report_tab, text="Relatórios", state="hidden")
-# repc_tab = RepEvoScreen(root_notebook)
-# root_notebook.add(repc_tab, text="Relógio Ponto", state="hidden")
+rep_evo_tab = RepEvoScreen(root_notebook, root)
+root_notebook.add(rep_evo_tab, text="Relógio Ponto", state="hidden")
 user_frame = ttk.Frame(root, borderwidth=2, height=13, relief="sunken", width=50)
 user_frame.place(relx=0.98, y=0, anchor=NE)
 user_name_label = ttk.Label(user_frame, text="Usuário:", font=font13)
@@ -1936,7 +1977,7 @@ report_export_button = Button(
 )
 report_hide_show_button = Button(
     report_tab_frame,
-    image=eye_image,
+    #image=eye_image,
     command=hide_and_show,
 )
 # -----------------------------------------------------------------------------------------------------------
@@ -1995,16 +2036,13 @@ report_resp_entry.bind("<KP_Enter>", lambda event: calc_report_metrics(event, re
 report_tab_frame.bind_all("<KeyPress-d>", set_checkbox_cash)
 
 if __name__ == "__main__":
-    open_printer_connection()
-    if get_old_parkings():
-        send_report_by_email()
-        clear_old_records()
+    #open_printer_connection()
     global df_in, df_out
     df_in = get_today_parkings_as_df_in()
     df_out = get_today_parkings_as_df_out()
     mount_in_table()
     mount_out_table()
+    # fifo_monitor(root)
+    # login_modal.destroy()
     agendar_leitura_repC()
-    start_detector()
-    watch_detector(root)
     root.mainloop()

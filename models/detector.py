@@ -10,7 +10,11 @@ import atexit
 import logging
 import subprocess
 import sys
+import logging
 from datetime import datetime
+from parkocr import Detector
+from models.parking import get_parking_by_plate, update_parking, calc_exit_status, insert_exit_plate_time
+from schemas.parking import UpdateParkingModel
 
 from models.lpr.config import PROJECT_ROOT
 
@@ -45,17 +49,20 @@ def on_plate_detected(plate: str) -> None:
     log.info("Saída %s registrada -> %s", plate, status)
 
 
-def start_detector() -> subprocess.Popen:
-    """Inicia o processo leitor (uma única vez). Reinicia se ele tiver morrido."""
-    global _process
-    if _process is not None and _process.poll() is None:
-        return _process
-    _process = subprocess.Popen(
-        [sys.executable, "-m", "models.lpr"],
-        cwd=PROJECT_ROOT,
-    )
-    log.info("Leitor de placas iniciado (pid %s)", _process.pid)
-    return _process
+def on_plate_detected(plate: str):
+    now = datetime.now()
+    parking = get_parking_by_plate(plate[3:])
+    if parking:
+        if parking.status == "FINALIZADO":
+            status = calc_exit_status(parking["delta_time"], parking["entry_time"], now)
+        elif parking.status in ["EM ABERTO", "RETORNO"]:
+            status = "DIVERGENTE"
+        update_parking(plate[3:], UpdateParkingModel(
+            exit_plate_time=now,
+            exit_status=status
+        ))
+    else:
+        insert_exit_plate_time(plate[3:], now, "DIVERGENTE")
 
 
 def stop_detector() -> None:
